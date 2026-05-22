@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ScriptFile } from '@shared/types/web';
 import { I18nProvider } from '@/lib/i18n';
@@ -127,5 +127,325 @@ describe('CodeEditor — "+" menu toggle / dismiss', () => {
     // onClick handler (beginCreate) would never fire on real interaction.
     fireEvent.mouseDown(newFileBtn);
     expect(screen.queryByTestId('script-create-menu')).toBeInTheDocument();
+  });
+});
+
+/* ─── scripts-tree-dnd ──────────────────────────────────────────────── */
+
+// Minimal DataTransfer stub: happy-dom does not implement HTML5 DnD; RTL's
+// fireEvent.dragStart/dragOver/drop only carry whatever dataTransfer object
+// we hand them. We mirror what the implementation needs: setData/getData on
+// a custom MIME type, effectAllowed read/write, and a no-op setDragImage.
+function makeDataTransfer() {
+  const store = new Map<string, string>();
+  return {
+    effectAllowed: 'none' as string,
+    dropEffect: 'none' as string,
+    setData: (type: string, value: string) => {
+      store.set(type, value);
+    },
+    getData: (type: string) => store.get(type) ?? '',
+    setDragImage: vi.fn(),
+    clearData: () => store.clear(),
+    types: Array.from(store.keys()),
+    files: [] as File[],
+    items: [] as unknown[],
+  };
+}
+
+const dragRow = (path: string) =>
+  document.querySelector<HTMLElement>(`[data-drag-path="${path}"]`);
+const dropTarget = (path: string) =>
+  document.querySelector<HTMLElement>(`[data-drop-target="${path}"]`);
+
+const scriptsWithFolders: ScriptFile[] = [
+  { path: 'auth', name: 'auth', type: 'folder' },
+  { path: 'auth/admin.ts', name: 'admin.ts', type: 'file' },
+  { path: 'flows', name: 'flows', type: 'folder' },
+  { path: 'flows/checkout.ts', name: 'checkout.ts', type: 'file' },
+  { path: 'a.ts', name: 'a.ts', type: 'file' },
+  { path: 'b.ts', name: 'b.ts', type: 'file' },
+  { path: 'c.ts', name: 'c.ts', type: 'file' },
+];
+
+describe('CodeEditor — drag & drop (scripts-tree-dnd)', () => {
+  // AC1: single file dragged onto a folder triggers a single-element move batch.
+  it('AC1: drops a single file onto a folder → onMove called with that move', async () => {
+    const onMove = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <I18nProvider>
+        <CodeEditor {...baseProps()} scripts={scriptsWithFolders} onMove={onMove} />
+      </I18nProvider>,
+    );
+
+    const source = dragRow('a.ts');
+    const target = dropTarget('auth');
+    expect(source).not.toBeNull();
+    expect(target).not.toBeNull();
+
+    const dt = makeDataTransfer();
+    fireEvent.dragStart(source!, { dataTransfer: dt });
+    fireEvent.dragOver(target!, { dataTransfer: dt });
+    fireEvent.drop(target!, { dataTransfer: dt });
+
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onMove).toHaveBeenCalledWith([{ from: 'a.ts', to: 'auth/a.ts' }]);
+  });
+
+  // AC2: single folder dragged onto the root drop zone → moved to root.
+  it('AC2: drops a folder onto the root drop zone → onMove called with root-targeted move', async () => {
+    const onMove = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <I18nProvider>
+        <CodeEditor
+          {...baseProps()}
+          scripts={[
+            { path: 'auth', name: 'auth', type: 'folder' },
+            { path: 'auth/nested', name: 'nested', type: 'folder' },
+            { path: 'auth/nested/x.ts', name: 'x.ts', type: 'file' },
+          ]}
+          onMove={onMove}
+        />
+      </I18nProvider>,
+    );
+
+    const source = dragRow('auth/nested');
+    const root = dropTarget('');
+    expect(source).not.toBeNull();
+    expect(root).not.toBeNull();
+
+    const dt = makeDataTransfer();
+    fireEvent.dragStart(source!, { dataTransfer: dt });
+    fireEvent.dragOver(root!, { dataTransfer: dt });
+    fireEvent.drop(root!, { dataTransfer: dt });
+
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onMove).toHaveBeenCalledWith([{ from: 'auth/nested', to: 'nested' }]);
+  });
+
+  // AC3: Cmd-click multi-select then drop one of the selected items → all move together.
+  it('AC3: Cmd-click multi-select then drop carries all selected items in the batch', async () => {
+    const user = userEvent.setup();
+    const onMove = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <I18nProvider>
+        <CodeEditor {...baseProps()} scripts={scriptsWithFolders} onMove={onMove} />
+      </I18nProvider>,
+    );
+
+    const aRow = dragRow('a.ts');
+    const bRow = dragRow('b.ts');
+    expect(aRow).not.toBeNull();
+    expect(bRow).not.toBeNull();
+
+    // Cmd-click selects two files (toggle add).
+    await user.click(aRow!);
+    await user.keyboard('{Meta>}');
+    await user.click(bRow!);
+    await user.keyboard('{/Meta}');
+
+    const dt = makeDataTransfer();
+    // Drag begins from one of the selected items.
+    fireEvent.dragStart(bRow!, { dataTransfer: dt });
+    const target = dropTarget('auth');
+    fireEvent.dragOver(target!, { dataTransfer: dt });
+    fireEvent.drop(target!, { dataTransfer: dt });
+
+    expect(onMove).toHaveBeenCalledTimes(1);
+    const moves = onMove.mock.calls[0]![0] as { from: string; to: string }[];
+    // Order is not contractual; sort to compare.
+    const sorted = [...moves].sort((x, y) => x.from.localeCompare(y.from));
+    expect(sorted).toEqual([
+      { from: 'a.ts', to: 'auth/a.ts' },
+      { from: 'b.ts', to: 'auth/b.ts' },
+    ]);
+  });
+
+  // AC4: Shift-click range select + drop → range members included.
+  it('AC4: Shift-click range select then drop includes every item in the range', async () => {
+    const user = userEvent.setup();
+    const onMove = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <I18nProvider>
+        <CodeEditor {...baseProps()} scripts={scriptsWithFolders} onMove={onMove} />
+      </I18nProvider>,
+    );
+
+    const aRow = dragRow('a.ts');
+    const cRow = dragRow('c.ts');
+    expect(aRow).not.toBeNull();
+    expect(cRow).not.toBeNull();
+
+    // Anchor click on a.ts, then shift-click c.ts to select a–b–c.
+    await user.click(aRow!);
+    await user.keyboard('{Shift>}');
+    await user.click(cRow!);
+    await user.keyboard('{/Shift}');
+
+    const dt = makeDataTransfer();
+    fireEvent.dragStart(cRow!, { dataTransfer: dt });
+    const target = dropTarget('auth');
+    fireEvent.dragOver(target!, { dataTransfer: dt });
+    fireEvent.drop(target!, { dataTransfer: dt });
+
+    expect(onMove).toHaveBeenCalledTimes(1);
+    const moves = onMove.mock.calls[0]![0] as { from: string; to: string }[];
+    const sorted = [...moves].sort((x, y) => x.from.localeCompare(y.from));
+    expect(sorted).toEqual([
+      { from: 'a.ts', to: 'auth/a.ts' },
+      { from: 'b.ts', to: 'auth/b.ts' },
+      { from: 'c.ts', to: 'auth/c.ts' },
+    ]);
+  });
+
+  // AC5: conflict → error surface visible to the user; spec calls it a "toast".
+  // No toast infra exists in this project (grep for `toast|sonner|use-toast`
+  // returns nothing), so the implementer must surface the error somewhere
+  // testable. We pin a stable testid `script-move-error` that the component
+  // must render when onMove resolves to `{ ok: false }`.
+  it('AC5: shows an error banner when onMove rejects with a conflict', async () => {
+    const onMove = vi.fn().mockResolvedValue({
+      ok: false,
+      error: 'conflict',
+      conflicts: ['auth/a.ts'],
+    });
+    render(
+      <I18nProvider>
+        <CodeEditor {...baseProps()} scripts={scriptsWithFolders} onMove={onMove} />
+      </I18nProvider>,
+    );
+
+    const source = dragRow('a.ts');
+    const target = dropTarget('auth');
+    const dt = makeDataTransfer();
+    fireEvent.dragStart(source!, { dataTransfer: dt });
+    fireEvent.dragOver(target!, { dataTransfer: dt });
+    await act(async () => {
+      fireEvent.drop(target!, { dataTransfer: dt });
+    });
+
+    const banner = await screen.findByTestId('script-move-error');
+    expect(banner).toBeInTheDocument();
+    // The banner must mention the conflicting path so the user can locate it.
+    expect(banner.textContent ?? '').toContain('auth/a.ts');
+  });
+
+  // AC6: folder dropped onto itself / its descendant is silently ignored
+  // (no onMove call, no error banner).
+  it('AC6: dropping a folder onto itself does NOT call onMove', async () => {
+    const onMove = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <I18nProvider>
+        <CodeEditor {...baseProps()} scripts={scriptsWithFolders} onMove={onMove} />
+      </I18nProvider>,
+    );
+
+    const source = dragRow('auth');
+    const target = dropTarget('auth');
+    expect(source).not.toBeNull();
+    expect(target).not.toBeNull();
+
+    const dt = makeDataTransfer();
+    fireEvent.dragStart(source!, { dataTransfer: dt });
+    fireEvent.dragOver(target!, { dataTransfer: dt });
+    fireEvent.drop(target!, { dataTransfer: dt });
+
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it('AC6: dropping a folder onto its own descendant does NOT call onMove', async () => {
+    const onMove = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <I18nProvider>
+        <CodeEditor
+          {...baseProps()}
+          scripts={[
+            { path: 'auth', name: 'auth', type: 'folder' },
+            { path: 'auth/inner', name: 'inner', type: 'folder' },
+            { path: 'auth/inner/x.ts', name: 'x.ts', type: 'file' },
+          ]}
+          onMove={onMove}
+        />
+      </I18nProvider>,
+    );
+
+    const source = dragRow('auth');
+    const target = dropTarget('auth/inner');
+    expect(source).not.toBeNull();
+    expect(target).not.toBeNull();
+
+    const dt = makeDataTransfer();
+    fireEvent.dragStart(source!, { dataTransfer: dt });
+    fireEvent.dragOver(target!, { dataTransfer: dt });
+    fireEvent.drop(target!, { dataTransfer: dt });
+
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  // AC7: hovering a closed folder for ~600ms auto-expands it.
+  it('AC7: hovering a collapsed folder for ~600ms during drag auto-expands it', async () => {
+    vi.useFakeTimers();
+    try {
+      const onMove = vi.fn().mockResolvedValue({ ok: true });
+      render(
+        <I18nProvider>
+          <CodeEditor {...baseProps()} scripts={scriptsWithFolders} onMove={onMove} />
+        </I18nProvider>,
+      );
+
+      const source = dragRow('a.ts');
+      const target = dropTarget('flows');
+      expect(source).not.toBeNull();
+      expect(target).not.toBeNull();
+
+      // Before hovering, flows is collapsed → its child file is not in DOM.
+      expect(dragRow('flows/checkout.ts')).toBeNull();
+
+      const dt = makeDataTransfer();
+      fireEvent.dragStart(source!, { dataTransfer: dt });
+      fireEvent.dragEnter(target!, { dataTransfer: dt });
+      fireEvent.dragOver(target!, { dataTransfer: dt });
+
+      // Just under the threshold: still collapsed.
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(dragRow('flows/checkout.ts')).toBeNull();
+
+      // Past the threshold (~600ms): auto-expanded.
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(dragRow('flows/checkout.ts')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // AC8: row currently being dragged renders dimmed (opacity-50).
+  it('AC8: row being dragged is visually dimmed (opacity-50)', () => {
+    const onMove = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <I18nProvider>
+        <CodeEditor {...baseProps()} scripts={scriptsWithFolders} onMove={onMove} />
+      </I18nProvider>,
+    );
+
+    const source = dragRow('a.ts');
+    expect(source).not.toBeNull();
+
+    const dt = makeDataTransfer();
+    fireEvent.dragStart(source!, { dataTransfer: dt });
+
+    // The implementation may apply the class to the row element itself or to
+    // its inner container. Walk up/down a little to find a class hit.
+    const hasDim = (el: Element | null) =>
+      !!el && (el.className.toString().includes('opacity-50'));
+    const inSubtree =
+      hasDim(source) ||
+      hasDim(source!.firstElementChild) ||
+      hasDim(source!.parentElement) ||
+      Array.from(source!.querySelectorAll('*')).some((c) => hasDim(c));
+    expect(inSubtree).toBe(true);
   });
 });

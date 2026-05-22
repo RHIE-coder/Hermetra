@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Editor from '@monaco-editor/react';
-import type { ScriptFile, ScriptFileBody } from '@shared/types/web';
+import type { ScriptFile, ScriptFileBody, ScriptMoveRequest, ScriptMoveResult } from '@shared/types/web';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -126,6 +126,12 @@ interface Props {
   onMkdir: (path: string) => Promise<void>;
   onSelectNew: (body: ScriptFileBody) => void;
   onRun: (source: string) => Promise<void>;
+  /**
+   * Atomic batch move of files / folders. Resolves with `{ ok: true }` on
+   * success or `{ ok: false, error, conflicts }` when any destination already
+   * exists (no partial move). Optional: when absent, drag-and-drop is disabled.
+   */
+  onMove?: (moves: ScriptMoveRequest[]) => Promise<ScriptMoveResult>;
 }
 
 export function CodeEditor({

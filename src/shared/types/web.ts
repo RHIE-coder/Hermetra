@@ -44,3 +44,19 @@ export interface ScriptFileBody {
   path: string;
   source: string;
 }
+
+/**
+ * Atomic batch move for the scripts tree. Each entry asks for a file or
+ * folder at `from` to be relocated to `to`. The batch is all-or-nothing:
+ * if any single move would conflict, the whole batch is refused.
+ */
+export interface ScriptMoveRequest {
+  /** Existing relative path (file or folder), e.g. "auth/login.ts" or "auth". */
+  from: string;
+  /** New relative path (parent + name), e.g. "team/login.ts". */
+  to: string;
+}
+
+export type ScriptMoveResult =
+  | { ok: true }
+  | { ok: false; error: string; conflicts: string[] };

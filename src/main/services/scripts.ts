@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ScriptFile, ScriptFileBody } from '@shared/types/web';
+import type { ScriptFile, ScriptFileBody, ScriptMoveRequest } from '@shared/types/web';
 import { workspaceManager } from './workspaceManager';
 
 type Slot = 'web' | 'mobile';
@@ -119,5 +119,16 @@ export const scriptsService = {
       }
     }
     return scriptsService.list(slot);
+  },
+  /**
+   * Atomic batch move. Implementation pending — see scripts-tree-dnd spec.
+   * The type signature exists so the failing red tests compile; the body
+   * intentionally throws so every behavior assertion fails on the same code
+   * path and the implementer can replace it wholesale.
+   */
+  move(slot: Slot, moves: ScriptMoveRequest[]): ScriptFile[] {
+    void slot;
+    void moves;
+    throw new Error('scriptsService.move not implemented');
   },
 };
