@@ -61,3 +61,26 @@ lesson is judgement-based.
     sections around. If the reference implies structural change, ask first.
   source: Pre-existing memory `feedback_redesign_scope.md`, promoted to ledger
     so it now blocks via auditor / sweeper checks.
+
+- id: esm-dirname-assumption
+  added: 2026-05-22
+  trigger: Writing Node scripts (.mjs / .ts / .js) anywhere in this project,
+    especially helpers that get loaded by tooling outside the main app build
+    (Playwright globalSetup, tests/e2e/fixtures, .claude/scripts/*).
+  mistake: Used `__dirname` or `__filename` directly. The project has
+    `"type": "module"` in package.json so every file is ESM and those globals
+    do not exist. Throws `ReferenceError: __dirname is not defined` at runtime,
+    often stopping the whole test/CI run before any test reports.
+  correct: At the top of every ESM module that needs the current directory,
+    derive the equivalent:
+        import { fileURLToPath } from 'node:url';
+        import path from 'node:path';
+        const HERE = path.dirname(fileURLToPath(import.meta.url));
+    Then use HERE in place of __dirname. (Re-declaring `const __dirname = ...`
+    also works — see src/main/index.ts.) No `rule:` regex because correct usage
+    (`const __dirname = path.dirname(fileURLToPath(import.meta.url))`) and
+    incorrect usage share the same token and only differ at file scope —
+    line-by-line regex cannot tell them apart without false positives.
+  source: /sprint electron-e2e-smoke, 2026-05-22; first Green attempt failed
+    at tests/e2e/setup/global-setup.ts:11 with ReferenceError. Fix applied
+    to global-setup.ts and tests/e2e/fixtures/electron.ts.
