@@ -210,8 +210,9 @@ States to handle:
 
 ---
 
-**Status:** active
+**Status:** done
 **Created:** 2026-05-22
+**Completed:** 2026-05-22
 **Slug:** mobile-inspector-page
 **Origin:** intake
 **Depends on:** devices-my-storage (P2), devices-tabbed-detail-apps (P3),
