@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import type {
   AppiumServerStatus,
+  AppleSigningIdentity,
   Capability,
   CapabilityTestResult,
+  Connection,
+  ConnectionTestResult,
   InstalledApp,
   MobileDevice,
   MobileSessionStatus,
@@ -27,9 +30,13 @@ interface MobileState {
   savedDevices: SavedDevice[];
   capabilities: Capability[];
   activeCapabilityId: string | null;
+  // P4 — connection configs (per-workspace). Replaces capability concept.
+  connections: Connection[];
+  activeConnectionId: string | null;
+  appleIdentities: AppleSigningIdentity[];
   session: MobileSessionStatus;
   lastScreenshot: string | null;
-  lastTest: CapabilityTestResult | null;
+  lastTest: CapabilityTestResult | ConnectionTestResult | null;
   output: string;
   scripts: ScriptFile[];
   currentScript: ScriptFileBody | null;
@@ -54,6 +61,13 @@ interface MobileState {
   saveCapability: (c: Capability) => Promise<void>;
   removeCapability: (id: string) => Promise<void>;
   testCapability: (id: string) => Promise<CapabilityTestResult>;
+  // P4 — connection actions.
+  refreshConnections: () => Promise<void>;
+  saveConnection: (c: Connection) => Promise<void>;
+  removeConnection: (id: string) => Promise<void>;
+  useConnection: (id: string | null) => Promise<void>;
+  testConnection: (id: string) => Promise<ConnectionTestResult>;
+  listAppleCerts: () => Promise<void>;
   startSession: (capabilityId: string) => Promise<void>;
   stopSession: () => Promise<void>;
   screenshot: () => Promise<void>;
@@ -77,6 +91,9 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   savedDevices: [],
   capabilities: [],
   activeCapabilityId: null,
+  connections: [],
+  activeConnectionId: null,
+  appleIdentities: [],
   session: { active: false, recording: false },
   lastScreenshot: null,
   lastTest: null,
@@ -194,6 +211,26 @@ export const useMobileStore = create<MobileState>((set, get) => ({
     const result = await invoke(CHANNELS.MOBILE_TEST_CAPABILITY, { id });
     set({ lastTest: result });
     return result;
+  },
+
+  /* P4 — connection actions. Stub bodies; implementer fills in. */
+  refreshConnections: async () => {
+    throw new Error('not implemented: refreshConnections');
+  },
+  saveConnection: async () => {
+    throw new Error('not implemented: saveConnection');
+  },
+  removeConnection: async () => {
+    throw new Error('not implemented: removeConnection');
+  },
+  useConnection: async () => {
+    throw new Error('not implemented: useConnection');
+  },
+  testConnection: async () => {
+    throw new Error('not implemented: testConnection');
+  },
+  listAppleCerts: async () => {
+    throw new Error('not implemented: listAppleCerts');
   },
 
   startSession: async (capabilityId) => {

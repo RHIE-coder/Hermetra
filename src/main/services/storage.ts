@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Capability } from '@shared/types/mobile';
+import type { Capability, Connection } from '@shared/types/mobile';
 import type { UrlBookmark } from '@shared/types/web';
 import type { Scenario } from '@shared/types/bridge';
 import { workspaceManager } from './workspaceManager';
@@ -9,6 +9,9 @@ interface StoreShape {
   bookmarks: UrlBookmark[];
   capabilities: Capability[];
   scenarios: Scenario[];
+  // P4 (devices-connection-config) — per-workspace connection configs.
+  connections: Connection[];
+  activeConnectionId: string | null;
 }
 
 const DEFAULTS: StoreShape = {
@@ -39,6 +42,8 @@ const DEFAULTS: StoreShape = {
       ],
     },
   ],
+  connections: [],
+  activeConnectionId: null,
 };
 
 function filePath(): string {
@@ -54,6 +59,9 @@ function read(): StoreShape {
         bookmarks: parsed.bookmarks ?? DEFAULTS.bookmarks,
         capabilities: parsed.capabilities ?? DEFAULTS.capabilities,
         scenarios: parsed.scenarios ?? DEFAULTS.scenarios,
+        // P4 fields — implementer adds the read+write here.
+        connections: DEFAULTS.connections,
+        activeConnectionId: DEFAULTS.activeConnectionId,
       };
     }
   } catch {
@@ -94,6 +102,18 @@ export const memoryStore = {
     const data = read();
     data.scenarios = v;
     write(data);
+  },
+  get connections(): Connection[] {
+    throw new Error('not implemented: memoryStore.connections (P4 devices-connection-config)');
+  },
+  set connections(_v: Connection[]) {
+    throw new Error('not implemented: memoryStore.connections (P4 devices-connection-config)');
+  },
+  get activeConnectionId(): string | null {
+    throw new Error('not implemented: memoryStore.activeConnectionId (P4 devices-connection-config)');
+  },
+  set activeConnectionId(_v: string | null) {
+    throw new Error('not implemented: memoryStore.activeConnectionId (P4 devices-connection-config)');
   },
   removeScenario(id: string): Scenario[] {
     const data = read();

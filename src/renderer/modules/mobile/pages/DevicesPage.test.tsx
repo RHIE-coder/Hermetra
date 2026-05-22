@@ -591,15 +591,18 @@ describe('DevicesPage — P3 tabs + apps tab + tooling badge', () => {
     expect(badge.getAttribute('data-status')).toBe('missing');
   });
 
-  // AC10: 연결 구성 tab content is just a placeholder testId.
-  it('AC10: 연결 구성 tab content shows connection-config-placeholder only', async () => {
+  // AC10 (now P4 — devices-connection-config): the placeholder is replaced
+  // by the new ConnectionConfigTab content (`conn-config-tab-content`).
+  it('AC10: 연결 구성 tab content renders conn-config-tab-content (no placeholder)', async () => {
     const user = userEvent.setup();
     renderPage();
 
     await user.click(screen.getByTestId('devices-tab-connection'));
 
-    const placeholder = await screen.findByTestId('connection-config-placeholder');
-    expect(placeholder).toBeInTheDocument();
+    // P4 — placeholder is gone, real tab content present.
+    expect(screen.queryByTestId('connection-config-placeholder')).not.toBeInTheDocument();
+    const tab = await screen.findByTestId('conn-config-tab-content');
+    expect(tab).toBeInTheDocument();
     // P2 layout testIds must NOT be visible while the 연결 구성 tab is active.
     expect(screen.queryByTestId('my-devices-list')).not.toBeInTheDocument();
   });

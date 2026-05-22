@@ -22,6 +22,9 @@ import type {
   CapabilityTestResult,
   SavedDevice,
   InstalledApp,
+  Connection,
+  ConnectionTestResult,
+  AppleSigningIdentity,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
 import type {
@@ -87,6 +90,14 @@ export const CHANNELS = {
   DEVICE_REMOVE: 'device:saved:remove',
   DEVICE_UPDATE_ALIAS: 'device:saved:update-alias',
   DEVICE_APPS_LIST: 'device:apps:list',
+
+  // Mobile — Connection configs (per-workspace) — devices-connection-config (P4)
+  CONN_LIST: 'mobile:connection:list',
+  CONN_SAVE: 'mobile:connection:save',
+  CONN_REMOVE: 'mobile:connection:remove',
+  CONN_USE: 'mobile:connection:use',
+  CONN_TEST: 'mobile:connection:test',
+  APPLE_CERTS_LIST: 'mobile:apple:certs:list',
 
   // Mobile — Scripts
   MOBILE_SCRIPTS_LIST: 'mobile:scripts:list',
@@ -185,6 +196,13 @@ export interface IpcContract {
   [CHANNELS.DEVICE_REMOVE]: { input: { id: string }; output: { ok: true } };
   [CHANNELS.DEVICE_UPDATE_ALIAS]: { input: { id: string; alias: string | null }; output: { ok: true } };
   [CHANNELS.DEVICE_APPS_LIST]: { input: { deviceId: string }; output: { apps: InstalledApp[] } };
+
+  [CHANNELS.CONN_LIST]: { input: void; output: { connections: Connection[]; activeId: string | null } };
+  [CHANNELS.CONN_SAVE]: { input: { connection: Connection }; output: { ok: true } };
+  [CHANNELS.CONN_REMOVE]: { input: { id: string }; output: { ok: true } };
+  [CHANNELS.CONN_USE]: { input: { id: string | null }; output: { ok: true } };
+  [CHANNELS.CONN_TEST]: { input: { id: string }; output: ConnectionTestResult };
+  [CHANNELS.APPLE_CERTS_LIST]: { input: void; output: { identities: AppleSigningIdentity[] } };
 
   [CHANNELS.MOBILE_SCRIPTS_LIST]: { input: void; output: ScriptFile[] };
   [CHANNELS.MOBILE_SCRIPTS_READ]: { input: { path: string }; output: ScriptFileBody };

@@ -73,6 +73,49 @@ export interface InstalledApp {
 }
 
 /**
+ * A per-workspace connection configuration.
+ *
+ * Stored in `<workspaceDir>/store.json` under `connections[]`. References a
+ * `SavedDevice.id`. At most one connection per workspace may be active
+ * (tracked by sibling `activeConnectionId` on store.json).
+ */
+export interface Connection {
+  id: string;
+  name: string;
+  /** Reference to `SavedDevice.id`. */
+  deviceId: string;
+  platform: MobilePlatform;
+  /** Bundle id (iOS) or app package (Android) of the selected app, if any. */
+  bundleId?: string;
+  /** iOS-only Team ID (xcodeOrgId). */
+  xcodeOrgId?: string;
+  /** iOS-only signing identity hash from the macOS keychain. */
+  xcodeSigningId?: string;
+  /** Extra Appium capability key/value pairs (spread into the capability dict). */
+  extra: Record<string, string>;
+}
+
+/**
+ * One signing identity reported by `security find-identity -v -p codesigning`
+ * on macOS. `hash` is the leading SHA, `label` is the quoted descriptor, and
+ * `fullLine` is the raw line preserved for use as the dropdown label.
+ */
+export interface AppleSigningIdentity {
+  hash: string;
+  label: string;
+  fullLine: string;
+}
+
+/**
+ * Result of `CONN_TEST` — an Appium dry-run for a given connection.
+ */
+export interface ConnectionTestResult {
+  ok: boolean;
+  durationMs: number;
+  message: string;
+}
+
+/**
  * A device the user has explicitly saved to their "My Devices" list.
  *
  * Stored in `<userData>/devices.json` (global, not per-workspace). Separate
