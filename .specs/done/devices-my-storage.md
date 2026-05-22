@@ -168,8 +168,9 @@ electron `app.getPath('userData')` 직접 사용. CLAUDE.md §2.6 "genuinely glo
 
 ---
 
-**Status:** active
+**Status:** done
 **Created:** 2026-05-22
+**Completed:** 2026-05-22
 **Slug:** devices-my-storage
 **Origin:** intake
 **Depends on:** none
