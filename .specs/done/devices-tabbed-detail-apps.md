@@ -173,8 +173,9 @@ States:
 
 ---
 
-**Status:** active
+**Status:** done
 **Created:** 2026-05-22
+**Completed:** 2026-05-22
 **Slug:** devices-tabbed-detail-apps
 **Origin:** intake
 **Depends on:** devices-my-storage (P2)
