@@ -183,6 +183,18 @@ const en = {
   'mobile.devices.startRecord': 'Record video',
   'mobile.devices.stopRecord': 'Stop recording',
   'mobile.devices.noSession': 'No active session. Start one to use the device controls.',
+  'mobile.devices.liveConnections': 'Live connections',
+  'mobile.devices.myDevices': 'My devices',
+  'mobile.devices.saveToMy': 'Save to my devices',
+  'mobile.devices.removeFromMy': 'Remove from my devices',
+  'mobile.devices.alias': 'Alias',
+  'mobile.devices.aliasPlaceholder': 'Enter alias',
+  'mobile.devices.detail': 'Device detail',
+  'mobile.devices.info': 'Info',
+  'mobile.devices.apps': 'Apps',
+  'mobile.devices.lastConnected': 'Last connected',
+  'mobile.devices.saveHint':
+    'Saving to My Devices keeps the entry visible after disconnect.',
 
   // mobile — code
   'mobile.code.title': 'Mobile scripts',
@@ -438,6 +450,17 @@ const ko: Record<keyof typeof en, string> = {
   'mobile.devices.startRecord': '화면 녹화',
   'mobile.devices.stopRecord': '녹화 중지',
   'mobile.devices.noSession': '활성 세션이 없습니다. 세션을 시작하면 디바이스 조작이 가능합니다.',
+  'mobile.devices.liveConnections': '실시간 연결',
+  'mobile.devices.myDevices': '내 디바이스',
+  'mobile.devices.saveToMy': '내 디바이스로 저장',
+  'mobile.devices.removeFromMy': '내 디바이스에서 삭제',
+  'mobile.devices.alias': '별칭',
+  'mobile.devices.aliasPlaceholder': '별칭을 입력하세요',
+  'mobile.devices.detail': '기기 상세',
+  'mobile.devices.info': '정보',
+  'mobile.devices.apps': '앱',
+  'mobile.devices.lastConnected': '마지막 연결',
+  'mobile.devices.saveHint': '"내 디바이스로 저장"하면 연결이 해제되어도 목록에 유지됩니다.',
 
   // mobile — code
   'mobile.code.title': '모바일 스크립트',

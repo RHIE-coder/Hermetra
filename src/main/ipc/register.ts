@@ -1,7 +1,7 @@
-import { ipcMain, type BrowserWindow } from 'electron';
+import { app, ipcMain, type BrowserWindow } from 'electron';
 import { CHANNELS } from '@shared/ipc/channels';
 import type { Scenario } from '@shared/types/bridge';
-import type { Capability } from '@shared/types/mobile';
+import type { Capability, SavedDevice } from '@shared/types/mobile';
 import type { ScriptFileBody, ScriptMoveRequest, UrlBookmark } from '@shared/types/web';
 import { createPlaywrightWebDriver } from '../drivers/web/playwright';
 import { createMobileDriver } from '../drivers/mobile';
@@ -12,6 +12,7 @@ import { variablesService } from '../services/variables';
 import { memoryStore } from '../services/storage';
 import { scriptsService } from '../services/scripts';
 import { workspaceManager } from '../services/workspaceManager';
+import { myDevicesService } from '../services/myDevices';
 import { BrowserInstaller } from '../services/browserInstall';
 import type { Workspace } from '@shared/types/workspace';
 
@@ -23,6 +24,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   const orchestrator = new ScenarioOrchestrator({ web, mobile, events });
   const workspace = workspaceManager();
   const installer = new BrowserInstaller();
+  const userDataDir = app.isReady() ? app.getPath('userData') : process.cwd();
+  const myDevices = myDevicesService(userDataDir);
 
   const broadcast = <T>(channel: string, payload: T) => {
     const win = getWindow();
@@ -45,6 +48,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   const tick = async () => {
     try {
       const devices = await mobile.listDevices();
+      // AC5: update lastConnectedAt for any saved entry whose UDID is live.
+      for (const d of devices) myDevices.touchLastConnected(d.id);
       const j = JSON.stringify(devices);
       if (j !== lastDevicesJson) {
         lastDevicesJson = j;
@@ -143,6 +148,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
     const cap = memoryStore.capabilities.find((c) => c.id === input.capabilityId) ?? null;
     return mobile.runScript(input, cap);
   });
+
+  /* ── Mobile — Saved devices ("My Devices") ───────────────────────── */
+  ipcMain.handle(CHANNELS.DEVICE_LIST_SAVED, () => myDevices.list());
+  ipcMain.handle(CHANNELS.DEVICE_SAVE, (_e, { device }: { device: SavedDevice }) =>
+    myDevices.save(device),
+  );
+  ipcMain.handle(CHANNELS.DEVICE_REMOVE, (_e, { id }: { id: string }) => myDevices.remove(id));
+  ipcMain.handle(CHANNELS.DEVICE_UPDATE_ALIAS, (_e, p: { id: string; alias: string | null }) =>
+    myDevices.updateAlias(p.id, p.alias),
+  );
 
   /* ── Mobile Scripts ──────────────────────────────────────────────── */
   ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_LIST, () => scriptsService.get().list('mobile'));

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nProvider } from '@/lib/i18n';
 import { useMobileStore } from '../store';
@@ -200,6 +200,7 @@ describe('DevicesPage — my devices + detail panel', () => {
     expect(within(panel).getByTestId('device-detail-udid')).toHaveTextContent('UDID-1');
 
     // Clicking another row triggers selectDevice with that id.
+    cleanup();
     seedStore({
       savedDevices: [
         baseSaved({ id: 'ios:UDID-1', udid: 'UDID-1' }),

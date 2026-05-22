@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { SavedDevice } from '@shared/types/mobile';
 
 /**
@@ -11,7 +13,7 @@ import type { SavedDevice } from '@shared/types/mobile';
 export interface MyDevicesService {
   /** Return the full saved list. Auto-seeds `{ devices: [] }` if file missing. */
   list(): { devices: SavedDevice[] };
-  /** Insert or update a saved device by `id`. Returns the new list length. */
+  /** Insert or update a saved device by `id`. */
   save(device: SavedDevice): { ok: true };
   /** Remove by `id`. No-op if not found. */
   remove(id: string): { ok: true };
@@ -24,22 +26,111 @@ export interface MyDevicesService {
   touchLastConnected(udid: string): { ok: true };
 }
 
-export function createMyDevicesService(_baseDir: string): MyDevicesService {
+interface RawShape {
+  devices?: SavedDevice[];
+  [extra: string]: unknown;
+}
+
+export function createMyDevicesService(baseDir: string): MyDevicesService {
+  const filePath = path.join(baseDir, 'devices.json');
+
+  function readRaw(): RawShape {
+    if (!fs.existsSync(filePath)) {
+      writeRaw({ devices: [] });
+      return { devices: [] };
+    }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as RawShape;
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      /* corrupt — fall through to seed */
+    }
+    writeRaw({ devices: [] });
+    return { devices: [] };
+  }
+
+  function writeRaw(data: RawShape) {
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch {
+      /* noop */
+    }
+  }
+
+  function readDevices(): { raw: RawShape; devices: SavedDevice[] } {
+    const raw = readRaw();
+    const devices = Array.isArray(raw.devices) ? raw.devices : [];
+    return { raw, devices };
+  }
+
   return {
     list() {
-      throw new Error('not implemented');
+      const { devices } = readDevices();
+      return { devices };
     },
-    save(_device: SavedDevice) {
-      throw new Error('not implemented');
+
+    save(device) {
+      const { raw, devices } = readDevices();
+      const next = devices.slice();
+      const idx = next.findIndex((d) => d.id === device.id);
+      if (idx >= 0) next[idx] = device;
+      else next.push(device);
+      writeRaw({ ...raw, devices: next });
+      return { ok: true };
     },
-    remove(_id: string) {
-      throw new Error('not implemented');
+
+    remove(id) {
+      const { raw, devices } = readDevices();
+      const next = devices.filter((d) => d.id !== id);
+      if (next.length !== devices.length) {
+        writeRaw({ ...raw, devices: next });
+      }
+      return { ok: true };
     },
-    updateAlias(_id: string, _alias: string | null) {
-      throw new Error('not implemented');
+
+    updateAlias(id, alias) {
+      const { raw, devices } = readDevices();
+      const idx = devices.findIndex((d) => d.id === id);
+      if (idx < 0) return { ok: true };
+      const current = devices[idx]!;
+      const updated: SavedDevice = { ...current };
+      if (alias === null) {
+        delete updated.alias;
+      } else {
+        updated.alias = alias;
+      }
+      const next = devices.slice();
+      next[idx] = updated;
+      writeRaw({ ...raw, devices: next });
+      return { ok: true };
     },
-    touchLastConnected(_udid: string) {
-      throw new Error('not implemented');
+
+    touchLastConnected(udid) {
+      const { raw, devices } = readDevices();
+      const idx = devices.findIndex((d) => d.udid === udid);
+      if (idx < 0) return { ok: true };
+      const next = devices.slice();
+      next[idx] = { ...next[idx]!, lastConnectedAt: new Date().toISOString() };
+      writeRaw({ ...raw, devices: next });
+      return { ok: true };
     },
   };
+}
+
+let inst: MyDevicesService | null = null;
+let instBaseDir: string | null = null;
+
+/**
+ * Lazy singleton accessor for production wiring. `baseDir` must be passed on
+ * the first call (typically `app.getPath('userData')` from `register.ts`).
+ * Subsequent calls reuse the instance. Pass a new `baseDir` to rebind (used
+ * if Electron's userData changes; not expected at runtime).
+ */
+export function myDevicesService(baseDir?: string): MyDevicesService {
+  if (!inst || (baseDir && baseDir !== instBaseDir)) {
+    if (!baseDir) throw new Error('myDevicesService requires baseDir on first call');
+    inst = createMyDevicesService(baseDir);
+    instBaseDir = baseDir;
+  }
+  return inst;
 }

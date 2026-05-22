@@ -3,6 +3,7 @@ import {
   Camera,
   CheckCircle2,
   CircleAlert,
+  Copy,
   Edit2,
   Play,
   Plus,
@@ -21,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useT } from '@/lib/i18n';
-import type { Capability } from '@shared/types/mobile';
+import type { Capability, MobileDevice, SavedDevice } from '@shared/types/mobile';
 import type { MessageKey } from '@/lib/messages';
 
 interface ToolingRow {
@@ -37,12 +38,27 @@ const TOOLING: ToolingRow[] = [
   { key: 'libimobiledevice', title: 'libimobiledevice', descKey: 'mobile.devices.libimobiledeviceDesc', install: 'brew install libimobiledevice' },
 ];
 
+function liveToSaved(live: MobileDevice): SavedDevice {
+  const kind: SavedDevice['kind'] =
+    live.kind === 'real' ? 'real' : live.platform === 'ios' ? 'sim' : 'emu';
+  return {
+    id: `${live.platform}:${live.id}`,
+    platform: live.platform,
+    udid: live.id,
+    name: live.name,
+    kind,
+    lastConnectedAt: new Date().toISOString(),
+  };
+}
+
 export function DevicesPage() {
   const t = useT();
   const {
     tooling,
     appium,
     devices,
+    savedDevices,
+    selectedDeviceKey,
     capabilities,
     activeCapabilityId,
     session,
@@ -50,6 +66,11 @@ export function DevicesPage() {
     lastTest,
     refreshDevices,
     refreshTooling,
+    refreshSavedDevices,
+    saveDevice,
+    removeDevice,
+    updateAlias,
+    selectDevice,
     startAppium,
     stopAppium,
     connectExternal,
@@ -70,6 +91,11 @@ export function DevicesPage() {
   const [externalUrl, setExternalUrl] = useState('http://127.0.0.1:4723');
   const [testingId, setTestingId] = useState<string | null>(null);
   const [recordingResult, setRecordingResult] = useState<string | null>(null);
+  const [aliasDraft, setAliasDraft] = useState<string>('');
+
+  useEffect(() => {
+    void refreshSavedDevices();
+  }, [refreshSavedDevices]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -78,6 +104,46 @@ export function DevicesPage() {
     }, 5000);
     return () => clearInterval(id);
   }, [refreshDevices, refreshTooling]);
+
+  const liveByKey = new Map<string, MobileDevice>(
+    devices.map((d) => [`${d.platform}:${d.id}`, d]),
+  );
+  const savedByKey = new Map<string, SavedDevice>(savedDevices.map((s) => [s.id, s]));
+  const selectedSaved = selectedDeviceKey ? savedByKey.get(selectedDeviceKey) ?? null : null;
+  const selectedLive = selectedDeviceKey ? liveByKey.get(selectedDeviceKey) ?? null : null;
+  const detailName = selectedSaved?.name ?? selectedLive?.name ?? '';
+  const detailUdid = selectedSaved?.udid ?? selectedLive?.id ?? '';
+  const detailPlatform = selectedSaved?.platform ?? selectedLive?.platform ?? '';
+  const detailKind = selectedSaved?.kind ?? selectedLive?.kind ?? '';
+  const detailLastConnected = selectedSaved?.lastConnectedAt ?? '';
+  const detailIsConnected = !!(detailUdid && liveByKey.has(`${detailPlatform}:${detailUdid}`));
+
+  useEffect(() => {
+    setAliasDraft(selectedSaved?.alias ?? '');
+  }, [selectedSaved?.id, selectedSaved?.alias]);
+
+  const handleSaveLive = async (live: MobileDevice) => {
+    await saveDevice(liveToSaved(live));
+  };
+
+  const handleSaveSelected = async () => {
+    if (selectedLive) await saveDevice(liveToSaved(selectedLive));
+  };
+
+  const handleAliasBlur = () => {
+    if (!selectedSaved) return;
+    const next = aliasDraft.trim() === '' ? null : aliasDraft;
+    void updateAlias(selectedSaved.id, next);
+  };
+
+  const handleCopyUdid = async () => {
+    if (!detailUdid) return;
+    try {
+      await navigator.clipboard.writeText(detailUdid);
+    } catch {
+      /* clipboard may be unavailable in test env */
+    }
+  };
 
   return (
     <div data-testid="page-mobile-devices" className="gradient-mobile min-h-full p-6 space-y-6">
@@ -190,51 +256,235 @@ export function DevicesPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-base">{t('mobile.devices.connected')}</CardTitle>
-              <CardDescription>{t('mobile.devices.connectedDesc')}</CardDescription>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => void refreshDevices()}>
-              <RefreshCw className="h-4 w-4" /> {t('common.refresh')}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {devices.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
-              {t('mobile.devices.noDevices')}
-            </div>
-          ) : (
-            <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {devices.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
+      {/* Two-column: Live + My Devices on the left, Detail panel on the right. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">{t('mobile.devices.liveConnections')}</CardTitle>
+                  <CardDescription>{t('mobile.devices.saveHint')}</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => void refreshDevices()}>
+                  <RefreshCw className="h-4 w-4" /> {t('common.refresh')}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {devices.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                  {t('mobile.devices.noDevices')}
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {devices.map((d) => {
+                    const key = `${d.platform}:${d.id}`;
+                    const isSaved = savedByKey.has(key);
+                    return (
+                      <li
+                        key={d.id}
+                        className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
+                      >
+                        <div className="grid h-9 w-9 place-items-center rounded-md bg-mobile/10 text-mobile">
+                          <Smartphone className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">
+                            {d.name}
+                            {d.kind && <span className="text-muted-foreground"> · {d.kind}</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono truncate">
+                            {d.id} · {d.platform}
+                          </div>
+                        </div>
+                        {isSaved ? (
+                          <Badge variant="success">{t('common.installed')}</Badge>
+                        ) : (
+                          <Button
+                            variant="mobile"
+                            size="sm"
+                            data-testid={`device-save-btn-${d.id}`}
+                            onClick={() => void handleSaveLive(d)}
+                          >
+                            <Plus className="h-4 w-4" /> {t('mobile.devices.saveToMy')}
+                          </Button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('mobile.devices.myDevices')}</CardTitle>
+              <CardDescription>{t('mobile.devices.saveHint')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {savedDevices.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                  {t('mobile.devices.noDevices')}
+                </div>
+              ) : (
+                <ul data-testid="my-devices-list" className="space-y-2">
+                  {savedDevices.map((s) => {
+                    const isLive = liveByKey.has(s.id);
+                    const isSelected = selectedDeviceKey === s.id;
+                    return (
+                      <li
+                        key={s.id}
+                        data-testid={`my-device-item-${s.id}`}
+                        onClick={() => selectDevice(s.id)}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-3 rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-accent/30',
+                          isSelected && 'border-mobile/40 bg-mobile/5',
+                        )}
+                      >
+                        <div className="grid h-9 w-9 place-items-center rounded-md bg-mobile/10 text-mobile">
+                          <Smartphone className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">
+                            {s.alias || s.name}
+                            {s.kind && <span className="text-muted-foreground"> · {s.kind}</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono truncate">
+                            {s.udid} · {s.platform}
+                          </div>
+                        </div>
+                        <Badge
+                          variant={isLive ? 'success' : 'outline'}
+                          data-testid={`my-device-status-${s.id}`}
+                          data-status={isLive ? 'connected' : 'disconnected'}
+                        >
+                          {isLive ? t('common.online') : t('common.offline')}
+                        </Badge>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {selectedDeviceKey && (selectedSaved || selectedLive) ? (
+          <section
+            data-testid="device-detail-panel"
+            className="rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+          >
+            <div className="p-5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold leading-tight tracking-tight">
+                  {t('mobile.devices.detail')}
+                </h3>
+                <Badge variant={detailIsConnected ? 'success' : 'outline'}>
+                  {detailIsConnected ? t('common.online') : t('common.offline')}
+                </Badge>
+              </div>
+              <div className="flex gap-1 pt-2">
+                <button
+                  type="button"
+                  data-testid="device-detail-tab-info"
+                  className="rounded-md bg-mobile/10 px-3 py-1 text-xs font-medium text-mobile"
                 >
-                  <div className="grid h-9 w-9 place-items-center rounded-md bg-mobile/10 text-mobile">
-                    <Smartphone className="h-4 w-4" />
+                  {t('mobile.devices.info')}
+                </button>
+                <button
+                  type="button"
+                  data-testid="device-detail-tab-apps"
+                  disabled
+                  className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground disabled:opacity-50"
+                >
+                  {t('mobile.devices.apps')}
+                </button>
+              </div>
+            </div>
+            <div className="p-5 pt-0 space-y-4">
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-xs text-muted-foreground">{t('mobile.devices.profileName')}</div>
+                  <div data-testid="device-detail-name" className="font-medium">
+                    {detailName}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">
-                      {d.name}
-                      {d.kind && <span className="text-muted-foreground"> · {d.kind}</span>}
-                    </div>
-                    <div className="text-xs text-muted-foreground font-mono truncate">
-                      {d.id} · {d.platform}
-                    </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">UDID</div>
+                  <div className="flex items-center gap-2">
+                    <code
+                      data-testid="device-detail-udid"
+                      className="rounded-md bg-muted/60 px-2 py-1 text-[11px] font-mono"
+                    >
+                      {detailUdid}
+                    </code>
+                    <Button variant="ghost" size="icon" onClick={() => void handleCopyUdid()}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Badge variant={d.status === 'connected' ? 'success' : 'outline'}>
-                    {d.status === 'connected' ? t('common.online') : t('common.offline')}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">{t('mobile.devices.platform')}</div>
+                    <div className="font-medium">{detailPlatform || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Type</div>
+                    <div className="font-medium">{detailKind || '—'}</div>
+                  </div>
+                </div>
+                {detailLastConnected && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">{t('mobile.devices.lastConnected')}</div>
+                    <div className="font-mono text-xs">{detailLastConnected}</div>
+                  </div>
+                )}
+              </div>
+
+              {selectedSaved ? (
+                <div className="space-y-2 border-t border-border pt-4">
+                  <label className="text-xs text-muted-foreground" htmlFor="device-detail-alias">
+                    {t('mobile.devices.alias')}
+                  </label>
+                  <Input
+                    id="device-detail-alias"
+                    data-testid="device-detail-alias-input"
+                    placeholder={t('mobile.devices.aliasPlaceholder')}
+                    value={aliasDraft}
+                    onChange={(e) => setAliasDraft(e.target.value)}
+                    onBlur={handleAliasBlur}
+                  />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    data-testid="device-detail-remove-btn"
+                    onClick={() => void removeDevice(selectedSaved.id)}
+                  >
+                    <Trash2 className="h-4 w-4" /> {t('mobile.devices.removeFromMy')}
+                  </Button>
+                </div>
+              ) : (
+                <div className="border-t border-border pt-4">
+                  <Button
+                    variant="mobile"
+                    size="sm"
+                    data-testid="device-detail-save-btn"
+                    onClick={() => void handleSaveSelected()}
+                  >
+                    <Plus className="h-4 w-4" /> {t('mobile.devices.saveToMy')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+            {t('mobile.devices.detail')}
+          </div>
+        )}
+      </div>
 
       <Card>
         <CardHeader>

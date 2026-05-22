@@ -82,20 +82,25 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   selectedDeviceKey: null,
 
   refreshSavedDevices: async () => {
-    throw new Error('not implemented');
+    const { devices } = await invoke(CHANNELS.DEVICE_LIST_SAVED);
+    set({ savedDevices: devices });
   },
-  saveDevice: async (_device: SavedDevice) => {
-    throw new Error('not implemented');
+  saveDevice: async (device: SavedDevice) => {
+    await invoke(CHANNELS.DEVICE_SAVE, { device });
+    const { devices } = await invoke(CHANNELS.DEVICE_LIST_SAVED);
+    set({ savedDevices: devices });
   },
-  removeDevice: async (_id: string) => {
-    throw new Error('not implemented');
+  removeDevice: async (id: string) => {
+    await invoke(CHANNELS.DEVICE_REMOVE, { id });
+    const { devices } = await invoke(CHANNELS.DEVICE_LIST_SAVED);
+    set({ savedDevices: devices });
   },
-  updateAlias: async (_id: string, _alias: string | null) => {
-    throw new Error('not implemented');
+  updateAlias: async (id: string, alias: string | null) => {
+    await invoke(CHANNELS.DEVICE_UPDATE_ALIAS, { id, alias });
+    const { devices } = await invoke(CHANNELS.DEVICE_LIST_SAVED);
+    set({ savedDevices: devices });
   },
-  selectDevice: (_key: string | null) => {
-    throw new Error('not implemented');
-  },
+  selectDevice: (key: string | null) => set({ selectedDeviceKey: key }),
 
   init: async () => {
     const [tooling, appium, devices, capabilities, session, scripts] = await Promise.all([
