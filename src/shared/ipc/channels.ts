@@ -20,6 +20,7 @@ import type {
   AppiumServerStatus,
   MobileSessionStatus,
   CapabilityTestResult,
+  SavedDevice,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
 import type {
@@ -78,6 +79,12 @@ export const CHANNELS = {
   MOBILE_SESSION_RECORD_START: 'mobile:session:record-start',
   MOBILE_SESSION_RECORD_STOP: 'mobile:session:record-stop',
   MOBILE_RUN_SCRIPT: 'mobile:run-script',
+
+  // Mobile — Saved devices ("My Devices") — global, not per-workspace
+  DEVICE_LIST_SAVED: 'device:saved:list',
+  DEVICE_SAVE: 'device:saved:save',
+  DEVICE_REMOVE: 'device:saved:remove',
+  DEVICE_UPDATE_ALIAS: 'device:saved:update-alias',
 
   // Mobile — Scripts
   MOBILE_SCRIPTS_LIST: 'mobile:scripts:list',
@@ -170,6 +177,11 @@ export interface IpcContract {
   [CHANNELS.MOBILE_SESSION_RECORD_START]: { input: void; output: MobileSessionStatus };
   [CHANNELS.MOBILE_SESSION_RECORD_STOP]: { input: void; output: { dataUrl: string; status: MobileSessionStatus } };
   [CHANNELS.MOBILE_RUN_SCRIPT]: { input: { source: string; capabilityId: string }; output: WebScriptRunResult };
+
+  [CHANNELS.DEVICE_LIST_SAVED]: { input: void; output: { devices: SavedDevice[] } };
+  [CHANNELS.DEVICE_SAVE]: { input: { device: SavedDevice }; output: { ok: true } };
+  [CHANNELS.DEVICE_REMOVE]: { input: { id: string }; output: { ok: true } };
+  [CHANNELS.DEVICE_UPDATE_ALIAS]: { input: { id: string; alias: string | null }; output: { ok: true } };
 
   [CHANNELS.MOBILE_SCRIPTS_LIST]: { input: void; output: ScriptFile[] };
   [CHANNELS.MOBILE_SCRIPTS_READ]: { input: { path: string }; output: ScriptFileBody };

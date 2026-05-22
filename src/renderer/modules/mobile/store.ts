@@ -5,6 +5,7 @@ import type {
   CapabilityTestResult,
   MobileDevice,
   MobileSessionStatus,
+  SavedDevice,
   ToolingStatus,
 } from '@shared/types/mobile';
 import type {
@@ -22,6 +23,7 @@ interface MobileState {
   tooling: ToolingStatus;
   appium: AppiumServerStatus;
   devices: MobileDevice[];
+  savedDevices: SavedDevice[];
   capabilities: Capability[];
   activeCapabilityId: string | null;
   session: MobileSessionStatus;
@@ -30,8 +32,14 @@ interface MobileState {
   output: string;
   scripts: ScriptFile[];
   currentScript: ScriptFileBody | null;
+  selectedDeviceKey: string | null;
 
   init: () => Promise<void>;
+  refreshSavedDevices: () => Promise<void>;
+  saveDevice: (device: SavedDevice) => Promise<void>;
+  removeDevice: (id: string) => Promise<void>;
+  updateAlias: (id: string, alias: string | null) => Promise<void>;
+  selectDevice: (key: string | null) => void;
   refreshDevices: () => Promise<void>;
   refreshTooling: () => Promise<void>;
   startAppium: (port?: number) => Promise<void>;
@@ -62,6 +70,7 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   tooling: { appium: false, adb: false, libimobiledevice: false },
   appium: { isRunning: false, mode: null, url: 'http://127.0.0.1:4723' },
   devices: [],
+  savedDevices: [],
   capabilities: [],
   activeCapabilityId: null,
   session: { active: false, recording: false },
@@ -70,6 +79,23 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   output: '',
   scripts: [],
   currentScript: null,
+  selectedDeviceKey: null,
+
+  refreshSavedDevices: async () => {
+    throw new Error('not implemented');
+  },
+  saveDevice: async (_device: SavedDevice) => {
+    throw new Error('not implemented');
+  },
+  removeDevice: async (_id: string) => {
+    throw new Error('not implemented');
+  },
+  updateAlias: async (_id: string, _alias: string | null) => {
+    throw new Error('not implemented');
+  },
+  selectDevice: (_key: string | null) => {
+    throw new Error('not implemented');
+  },
 
   init: async () => {
     const [tooling, appium, devices, capabilities, session, scripts] = await Promise.all([

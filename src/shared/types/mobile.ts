@@ -60,3 +60,24 @@ export interface CapabilityTestResult {
   message: string;
   durationMs: number;
 }
+
+/**
+ * A device the user has explicitly saved to their "My Devices" list.
+ *
+ * Stored in `<userData>/devices.json` (global, not per-workspace). Separate
+ * from the live-detected `MobileDevice` so entries survive disconnect.
+ */
+export interface SavedDevice {
+  /** Normalized key: `${platform}:${udid}`. */
+  id: string;
+  platform: MobilePlatform;
+  /** Raw UDID/serial as reported by the OS. */
+  udid: string;
+  /** Device name at the time of first save. */
+  name: string;
+  /** Optional user-supplied alias (free-form). */
+  alias?: string;
+  kind?: 'real' | 'sim' | 'emu';
+  /** ISO 8601 timestamp of the most recent detection. */
+  lastConnectedAt: string;
+}
