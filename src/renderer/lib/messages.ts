@@ -195,6 +195,16 @@ const en = {
   'mobile.devices.lastConnected': 'Last connected',
   'mobile.devices.saveHint':
     'Saving to My Devices keeps the entry visible after disconnect.',
+  'mobile.devices.tab.management': 'Device management',
+  'mobile.devices.tab.connection': 'Connection config',
+  'mobile.devices.tab.connection.placeholder': 'Connection config coming soon.',
+  'mobile.devices.apps.installed': 'Installed apps',
+  'mobile.devices.apps.search': 'Search apps (name/bundle ID/version)',
+  'mobile.devices.apps.empty': 'No matching apps.',
+  'mobile.devices.apps.loading': 'Loading apps...',
+  'mobile.devices.apps.refresh': 'Refresh',
+  'mobile.devices.tooling.statusOk': 'All tools installed',
+  'mobile.devices.tooling.statusMissing': 'Some tools are missing',
 
   // mobile — code
   'mobile.code.title': 'Mobile scripts',
@@ -461,6 +471,16 @@ const ko: Record<keyof typeof en, string> = {
   'mobile.devices.apps': '앱',
   'mobile.devices.lastConnected': '마지막 연결',
   'mobile.devices.saveHint': '"내 디바이스로 저장"하면 연결이 해제되어도 목록에 유지됩니다.',
+  'mobile.devices.tab.management': '기기 관리',
+  'mobile.devices.tab.connection': '연결 구성',
+  'mobile.devices.tab.connection.placeholder': '연결 구성은 곧 구현 예정입니다.',
+  'mobile.devices.apps.installed': '설치된 앱',
+  'mobile.devices.apps.search': '앱 검색 (이름/Bundle ID/버전)',
+  'mobile.devices.apps.empty': '조건에 맞는 앱이 없습니다.',
+  'mobile.devices.apps.loading': '앱 목록 조회 중...',
+  'mobile.devices.apps.refresh': '새로고침',
+  'mobile.devices.tooling.statusOk': '모든 도구가 설치되어 있습니다',
+  'mobile.devices.tooling.statusMissing': '일부 도구가 누락되었습니다',
 
   // mobile — code
   'mobile.code.title': '모바일 스크립트',

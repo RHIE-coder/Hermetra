@@ -87,8 +87,16 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   installedApps: [],
   installedAppsLoading: false,
 
-  refreshInstalledApps: async (_deviceId: string) => {
-    // Stub: implementer wires invoke(CHANNELS.DEVICE_APPS_LIST, { deviceId }).
+  refreshInstalledApps: async (deviceId: string) => {
+    set({ installedAppsLoading: true });
+    try {
+      const { apps } = await invoke(CHANNELS.DEVICE_APPS_LIST, { deviceId });
+      set({ installedApps: apps });
+    } catch {
+      set({ installedApps: [] });
+    } finally {
+      set({ installedAppsLoading: false });
+    }
   },
 
   refreshSavedDevices: async () => {

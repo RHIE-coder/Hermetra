@@ -158,6 +158,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(CHANNELS.DEVICE_UPDATE_ALIAS, (_e, p: { id: string; alias: string | null }) =>
     myDevices.updateAlias(p.id, p.alias),
   );
+  ipcMain.handle(CHANNELS.DEVICE_APPS_LIST, async (_e, { deviceId }: { deviceId: string }) => {
+    const apps = await mobile.listInstalledApps(deviceId);
+    return { apps };
+  });
 
   /* ── Mobile Scripts ──────────────────────────────────────────────── */
   ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_LIST, () => scriptsService.get().list('mobile'));
