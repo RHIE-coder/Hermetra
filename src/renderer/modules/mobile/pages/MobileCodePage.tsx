@@ -46,6 +46,7 @@ export function MobileCodePage() {
   return (
     <CodeEditor
       accent="mobile"
+      testId="page-mobile-code"
       titleKey="mobile.code.title"
       subtitleKey="mobile.code.subtitle"
       scripts={scripts}

@@ -15,7 +15,7 @@ export function VariableBusPage() {
   const t = useT();
 
   return (
-    <div className="gradient-bridge min-h-full p-6 space-y-6">
+    <div data-testid="page-bridge-bus" className="gradient-bridge min-h-full p-6 space-y-6">
       <header className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">

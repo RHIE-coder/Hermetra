@@ -80,7 +80,7 @@ export function DevicesPage() {
   }, [refreshDevices, refreshTooling]);
 
   return (
-    <div className="gradient-mobile min-h-full p-6 space-y-6">
+    <div data-testid="page-mobile-devices" className="gradient-mobile min-h-full p-6 space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">

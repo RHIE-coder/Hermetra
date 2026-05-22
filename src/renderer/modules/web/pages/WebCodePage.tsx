@@ -36,6 +36,7 @@ export function WebCodePage() {
   return (
     <CodeEditor
       accent="web"
+      testId="page-web-code"
       titleKey="web.code.title"
       subtitleKey="web.code.subtitle"
       scripts={scripts}

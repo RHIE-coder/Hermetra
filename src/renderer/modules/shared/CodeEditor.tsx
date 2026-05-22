@@ -119,6 +119,7 @@ interface Props {
   busy: boolean;
   rightHeader?: React.ReactNode;
   defaultSeed: string;
+  testId?: string;
   onLoad: (path: string) => Promise<void>;
   onSave: (body: ScriptFileBody) => Promise<void>;
   onDelete: (path: string) => Promise<void>;
@@ -140,6 +141,7 @@ export function CodeEditor({
   busy,
   rightHeader,
   defaultSeed,
+  testId,
   onLoad,
   onSave,
   onDelete,
@@ -407,7 +409,7 @@ export function CodeEditor({
   );
 
   return (
-    <div className={cn(accent === 'web' ? 'gradient-web' : 'gradient-mobile', 'min-h-full p-6 space-y-6')}>
+    <div data-testid={testId} className={cn(accent === 'web' ? 'gradient-web' : 'gradient-mobile', 'min-h-full p-6 space-y-6')}>
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">

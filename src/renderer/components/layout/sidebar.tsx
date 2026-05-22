@@ -17,6 +17,7 @@ interface NavItem {
   to: string;
   labelKey: MessageKey;
   icon: React.ComponentType<{ className?: string }>;
+  testId: string;
 }
 
 interface NavGroup {
@@ -30,26 +31,26 @@ const groups: NavGroup[] = [
     titleKey: 'sidebar.group.web',
     accent: 'web',
     items: [
-      { to: '/web/remote', labelKey: 'sidebar.web.remote', icon: Globe },
-      { to: '/web/code', labelKey: 'sidebar.web.code', icon: Terminal },
+      { to: '/web/remote', labelKey: 'sidebar.web.remote', icon: Globe, testId: 'nav-web-remote' },
+      { to: '/web/code', labelKey: 'sidebar.web.code', icon: Terminal, testId: 'nav-web-code' },
     ],
   },
   {
     titleKey: 'sidebar.group.mobile',
     accent: 'mobile',
     items: [
-      { to: '/mobile/devices', labelKey: 'sidebar.mobile.devices', icon: Smartphone },
-      { to: '/mobile/code', labelKey: 'sidebar.mobile.code', icon: Terminal },
+      { to: '/mobile/devices', labelKey: 'sidebar.mobile.devices', icon: Smartphone, testId: 'nav-mobile-devices' },
+      { to: '/mobile/code', labelKey: 'sidebar.mobile.code', icon: Terminal, testId: 'nav-mobile-code' },
     ],
   },
   {
     titleKey: 'sidebar.group.bridge',
     accent: 'bridge',
     items: [
-      { to: '/bridge/scenarios', labelKey: 'sidebar.bridge.scenarios', icon: Workflow },
-      { to: '/bridge/variables', labelKey: 'sidebar.bridge.variables', icon: Sliders },
-      { to: '/bridge/bus', labelKey: 'sidebar.bridge.bus', icon: Cable },
-      { to: '/bridge/events', labelKey: 'sidebar.bridge.events', icon: Activity },
+      { to: '/bridge/scenarios', labelKey: 'sidebar.bridge.scenarios', icon: Workflow, testId: 'nav-bridge-scenarios' },
+      { to: '/bridge/variables', labelKey: 'sidebar.bridge.variables', icon: Sliders, testId: 'nav-bridge-variables' },
+      { to: '/bridge/bus', labelKey: 'sidebar.bridge.bus', icon: Cable, testId: 'nav-bridge-bus' },
+      { to: '/bridge/events', labelKey: 'sidebar.bridge.events', icon: Activity, testId: 'nav-bridge-events' },
     ],
   },
 ];
@@ -88,6 +89,7 @@ export function Sidebar() {
                 <li key={item.to}>
                   <NavLink
                     to={item.to}
+                    data-testid={item.testId}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors',
