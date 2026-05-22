@@ -55,7 +55,14 @@ const SECTIONS = [
     ],
   },
   {
-    title: 'Part C6 — /sprint skill (universal)',
+    title: 'Part C6 — /quick skill (universal)',
+    files: [
+      { src: '.claude/skills/quick/SKILL.md', dst: '.claude/skills/quick/SKILL.md', lang: 'markdown' },
+      { src: '.claude/skills/quick/template.md', dst: '.claude/skills/quick/template.md', lang: 'markdown' },
+    ],
+  },
+  {
+    title: 'Part C7 — /sprint skill (universal)',
     files: [
       { src: '.claude/skills/sprint/SKILL.md', dst: '.claude/skills/sprint/SKILL.md', lang: 'markdown' },
       { src: '.claude/skills/sprint/template.md', dst: '.claude/skills/sprint/template.md', lang: 'markdown' },
@@ -63,7 +70,7 @@ const SECTIONS = [
     ],
   },
   {
-    title: 'Part C7 — /immunize skill (universal)',
+    title: 'Part C8 — /immunize skill (universal)',
     files: [
       { src: '.claude/skills/immunize/SKILL.md', dst: '.claude/skills/immunize/SKILL.md', lang: 'markdown' },
       { src: '.claude/skills/immunize/template.md', dst: '.claude/skills/immunize/template.md', lang: 'markdown' },
@@ -71,7 +78,7 @@ const SECTIONS = [
     ],
   },
   {
-    title: 'Part C8 — /sweep skill + drivers (universal)',
+    title: 'Part C9 — /sweep skill + drivers (universal)',
     files: [
       { src: '.claude/skills/sweep/SKILL.md', dst: '.claude/skills/sweep/SKILL.md', lang: 'markdown' },
       { src: '.claude/skills/sweep/scripts/run-all.mjs', dst: '.claude/skills/sweep/scripts/run-all.mjs', lang: 'javascript' },
@@ -83,14 +90,14 @@ const SECTIONS = [
     ],
   },
   {
-    title: 'Part C9 — PreToolUse hooks (universal)',
+    title: 'Part C10 — PreToolUse hooks (universal)',
     files: [
       { src: '.claude/hooks/design-token-guard.mjs', dst: '.claude/hooks/design-token-guard.mjs', lang: 'javascript' },
       { src: '.claude/hooks/immunity-rules-guard.mjs', dst: '.claude/hooks/immunity-rules-guard.mjs', lang: 'javascript' },
     ],
   },
   {
-    title: 'Part C10 — Settings + output style (universal/project)',
+    title: 'Part C11 — Settings + output style (universal/project)',
     files: [
       { src: '.claude/settings.json', dst: '.claude/settings.json', lang: 'json' },
       { src: '.claude/output-styles/hermetra.md', dst: '.claude/output-styles/<<PROJECT_NAME>>.md', lang: 'markdown', rename: true },
@@ -133,12 +140,16 @@ const HEAD = `# Portable Harness Setup Prompt (Self-Contained)
 
 ## What this gives you
 
-A four-step workflow:
+A workflow with five steps plus a fast path:
 
 1. **\`/setup\`** — Bootstrap or repair. Auto-fills what it can; interviews
    for what it can't; verifies via preflight. Run this first on a new project.
 2. **\`/intake "<request>"\`** — Exhaustive requirements analysis. Loops
    \`AskUserQuestion\` until the user explicitly approves a spec.
+   **2b. \`/quick "<one-liner>"\`** — Fast path for clearly simple, single-layer
+   changes. Generates a minimal spec, asks **one** confirmation, then
+   auto-invokes \`/sprint\`. Refuses if the change is multi-layer, adds
+   user-visible strings, a new IPC channel, page/route, or schema field.
 3. **\`/sprint <slug>\`** — Auto TDD loop. \`testwriter\` → \`implementer\` →
    \`auditor\` agents run in order. Full test suite runs **3 times** in one
    sprint (Red verify, Green verify, Audit). Side-effect-safe.
@@ -214,6 +225,7 @@ mkdir -p .specs/active .specs/done \\
   .claude/agents \\
   .claude/skills/setup \\
   .claude/skills/intake/scripts .claude/skills/intake/examples \\
+  .claude/skills/quick \\
   .claude/skills/sprint/scripts \\
   .claude/skills/immunize/scripts \\
   .claude/skills/sweep/scripts \\
@@ -328,12 +340,16 @@ Run in order. Stop and fix if any fails:
 Append (adapting \`<<N>>\` to the next section number):
 
 \`\`\`markdown
-## <<N>>. Workflow (four+1 steps, in order)
+## <<N>>. Workflow (five+1 steps, in order)
 
-Every non-trivial change goes through this loop. Trivial = rename, typo, comment.
+Every non-trivial change goes through this loop. Trivial = rename, typo, comment —
+just edit directly.
 
 0. \`/setup\` — bootstrap or repair (idempotent).
 1. \`/intake "<request>"\` — Requirements analysis.
+1b. \`/quick "<one-liner>"\` — Fast path: minimal spec + one confirmation +
+   auto-sprint. For clearly simple, single-layer changes only. Refuses
+   multi-layer / new-i18n / new-IPC-channel / new-page / new-schema-field.
 2. \`/sprint <slug>\` — Auto TDD loop.
 3. \`/immunize\` — Capture mistakes in .claude/immunity/ledger.md.
 4. \`/sweep\` — Project-wide audit (manual trigger).

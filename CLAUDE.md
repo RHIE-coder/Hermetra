@@ -189,9 +189,10 @@ If we ever move to SQLite or similar, the **DB Schema** test layer above is wher
 
 ---
 
-## 7. Workflow (four+1 steps, in order)
+## 7. Workflow (five+1 steps, in order)
 
-Every non-trivial change goes through this loop. Trivial = rename, typo, comment.
+Every non-trivial change goes through this loop. Trivial = rename, typo, comment
+— just edit directly.
 
 0. **`/setup`** — Run on a fresh checkout. Verifies via
    `node .claude/scripts/preflight.mjs`; auto-fills missing dirs/seeds;
@@ -199,6 +200,13 @@ Every non-trivial change goes through this loop. Trivial = rename, typo, comment
 1. **`/intake "<request>"`** — Requirements analysis. Loops `AskUserQuestion`
    until the user explicitly approves. Emits a spec under `.specs/active/<slug>.md`
    and registers Tasks. **No implementation.** See `.claude/skills/intake/`.
+   For *clearly simple* single-layer changes, use `/quick` instead (1b below).
+1b. **`/quick "<one-liner>"`** — Fast-path for clearly simple, single-layer
+   changes (small bug fix, regex tighten, one-file tweak). Generates a minimal
+   spec, asks **one** confirmation, then auto-invokes `/sprint`. Refuses and
+   routes to `/intake` if the change is multi-layer, adds user-visible strings,
+   adds an IPC channel, a page/route, or a schema field. See
+   `.claude/skills/quick/`.
 2. **`/sprint <slug>`** — Auto TDD loop. Orchestrates three subagents in order:
    - `testwriter` → smallest failing tests (Red)
    - `implementer` → minimum code to green (Green)
