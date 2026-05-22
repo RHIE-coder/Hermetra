@@ -121,14 +121,65 @@ export const scriptsService = {
     return scriptsService.list(slot);
   },
   /**
-   * Atomic batch move. Implementation pending — see scripts-tree-dnd spec.
-   * The type signature exists so the failing red tests compile; the body
-   * intentionally throws so every behavior assertion fails on the same code
-   * path and the implementer can replace it wholesale.
+   * Atomic batch move of files and folders inside one workspace slot.
+   *
+   * Two-phase: dry-run validates every move (path-escape, self/descendant,
+   * destination conflicts); only when the entire batch is valid do we apply
+   * the renames. Identity moves (`from === to`) are silently skipped so the
+   * UI can fire them without special-casing. Conflicts are surfaced both via
+   * a recognizable error message and a `conflicts: string[]` field attached
+   * to the thrown error so the renderer can list them.
    */
   move(slot: Slot, moves: ScriptMoveRequest[]): ScriptFile[] {
-    void slot;
-    void moves;
-    throw new Error('scriptsService.move not implemented');
+    // Phase 1 — resolve + classify every requested move.
+    interface Resolved {
+      from: string;
+      to: string;
+      fromAbs: string;
+      toAbs: string;
+    }
+    const resolved: Resolved[] = [];
+    for (const m of moves) {
+      // safePath throws "Invalid path" on traversal — propagate as-is.
+      const fromAbs = safePath(slot, m.from);
+      const toAbs = safePath(slot, m.to);
+      if (fromAbs === toAbs) continue; // identity no-op
+      resolved.push({ from: m.from, to: m.to, fromAbs, toAbs });
+    }
+
+    // Phase 2 — self / descendant guard. Reject moving a folder into itself
+    // or any of its own descendants (covers both the strict descendant case
+    // and the "drop folder onto its own path with new child" case).
+    for (const r of resolved) {
+      if (fs.existsSync(r.fromAbs) && fs.statSync(r.fromAbs).isDirectory()) {
+        const fromWithSep = r.fromAbs.endsWith(path.sep) ? r.fromAbs : r.fromAbs + path.sep;
+        if (r.toAbs === r.fromAbs || r.toAbs.startsWith(fromWithSep)) {
+          throw new Error(`Cannot move folder into itself or its descendants: ${r.from}`);
+        }
+      }
+    }
+
+    // Phase 3 — conflict dry-run. Collect every destination that already
+    // exists so the UI can show the full list, not just the first.
+    const conflicts: string[] = [];
+    for (const r of resolved) {
+      if (fs.existsSync(r.toAbs)) conflicts.push(r.to);
+    }
+    if (conflicts.length > 0) {
+      const err = new Error(`Move conflict: ${conflicts.join(', ')} already exists`) as Error & {
+        conflicts: string[];
+      };
+      err.conflicts = conflicts;
+      throw err;
+    }
+
+    // Phase 4 — apply. Renames are same-fs and atomic; we make parents
+    // first so deep destinations like "a/b/c.ts" work without prior mkdir.
+    for (const r of resolved) {
+      fs.mkdirSync(path.dirname(r.toAbs), { recursive: true });
+      fs.renameSync(r.fromAbs, r.toAbs);
+    }
+
+    return scriptsService.list(slot);
   },
 };

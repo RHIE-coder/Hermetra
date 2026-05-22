@@ -5,6 +5,7 @@ import type {
   WebScriptRunResult,
   ScriptFile,
   ScriptFileBody,
+  ScriptMoveRequest,
 } from '../types/web';
 import type {
   Workspace,
@@ -56,6 +57,7 @@ export const CHANNELS = {
   WEB_SCRIPTS_SAVE: 'web:scripts:save',
   WEB_SCRIPTS_DELETE: 'web:scripts:delete',
   WEB_SCRIPTS_MKDIR: 'web:scripts:mkdir',
+  WEB_SCRIPTS_MOVE: 'web:scripts:move',
 
   // Mobile
   MOBILE_TOOLING_STATUS: 'mobile:tooling-status',
@@ -83,6 +85,7 @@ export const CHANNELS = {
   MOBILE_SCRIPTS_SAVE: 'mobile:scripts:save',
   MOBILE_SCRIPTS_DELETE: 'mobile:scripts:delete',
   MOBILE_SCRIPTS_MKDIR: 'mobile:scripts:mkdir',
+  MOBILE_SCRIPTS_MOVE: 'mobile:scripts:move',
 
   // Variables (shared between web & mobile by design — that's the point)
   VARS_LOAD: 'vars:load',
@@ -147,6 +150,7 @@ export interface IpcContract {
   [CHANNELS.WEB_SCRIPTS_SAVE]: { input: ScriptFileBody; output: ScriptFile[] };
   [CHANNELS.WEB_SCRIPTS_DELETE]: { input: { path: string }; output: ScriptFile[] };
   [CHANNELS.WEB_SCRIPTS_MKDIR]: { input: { path: string }; output: ScriptFile[] };
+  [CHANNELS.WEB_SCRIPTS_MOVE]: { input: { moves: ScriptMoveRequest[] }; output: ScriptFile[] };
 
   [CHANNELS.MOBILE_TOOLING_STATUS]: { input: void; output: ToolingStatus };
   [CHANNELS.MOBILE_APPIUM_STATUS]: { input: void; output: AppiumServerStatus };
@@ -172,6 +176,7 @@ export interface IpcContract {
   [CHANNELS.MOBILE_SCRIPTS_SAVE]: { input: ScriptFileBody; output: ScriptFile[] };
   [CHANNELS.MOBILE_SCRIPTS_DELETE]: { input: { path: string }; output: ScriptFile[] };
   [CHANNELS.MOBILE_SCRIPTS_MKDIR]: { input: { path: string }; output: ScriptFile[] };
+  [CHANNELS.MOBILE_SCRIPTS_MOVE]: { input: { moves: ScriptMoveRequest[] }; output: ScriptFile[] };
 
   [CHANNELS.VARS_LOAD]: { input: void; output: VariablesDocument };
   [CHANNELS.VARS_SAVE]: { input: VariablesDocument; output: VariablesDocument };

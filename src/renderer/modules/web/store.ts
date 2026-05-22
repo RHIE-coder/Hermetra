@@ -5,6 +5,8 @@ import type {
   UrlBookmark,
   ScriptFile,
   ScriptFileBody,
+  ScriptMoveRequest,
+  ScriptMoveResult,
 } from '@shared/types/web';
 import { CHANNELS } from '@shared/ipc/channels';
 import { invoke, subscribe } from '@/services/ipc';
@@ -39,6 +41,7 @@ interface WebState {
   saveScript: (body: ScriptFileBody) => Promise<void>;
   deleteScript: (path: string) => Promise<void>;
   mkdirScript: (path: string) => Promise<void>;
+  moveScripts: (moves: ScriptMoveRequest[]) => Promise<ScriptMoveResult>;
   setCurrentScript: (body: ScriptFileBody | null) => void;
 }
 
@@ -165,6 +168,19 @@ export const useWebStore = create<WebState>((set, get) => ({
   mkdirScript: async (path) => {
     const scripts = await invoke(CHANNELS.WEB_SCRIPTS_MKDIR, { path });
     set({ scripts });
+  },
+
+  moveScripts: async (moves) => {
+    try {
+      const scripts = await invoke(CHANNELS.WEB_SCRIPTS_MOVE, { moves });
+      set({ scripts });
+      return { ok: true };
+    } catch (e) {
+      const err = e as { message?: string; conflicts?: string[] };
+      const message = err.message ?? String(e);
+      const conflicts = Array.isArray(err.conflicts) ? err.conflicts : [];
+      return { ok: false, error: message, conflicts };
+    }
   },
 
   setCurrentScript: (body) => set({ currentScript: body }),

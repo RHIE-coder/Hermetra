@@ -24,6 +24,7 @@ export function WebCodePage() {
     saveScript,
     deleteScript,
     mkdirScript,
+    moveScripts,
     setCurrentScript,
     runScript,
   } = useWebStore();
@@ -51,6 +52,7 @@ export function WebCodePage() {
       onSave={saveScript}
       onDelete={deleteScript}
       onMkdir={mkdirScript}
+      onMove={moveScripts}
       onSelectNew={setCurrentScript}
       onRun={async (source) => {
         setBusy(true);

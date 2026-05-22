@@ -2,7 +2,7 @@ import { ipcMain, type BrowserWindow } from 'electron';
 import { CHANNELS } from '@shared/ipc/channels';
 import type { Scenario } from '@shared/types/bridge';
 import type { Capability } from '@shared/types/mobile';
-import type { ScriptFileBody, UrlBookmark } from '@shared/types/web';
+import type { ScriptFileBody, ScriptMoveRequest, UrlBookmark } from '@shared/types/web';
 import { createPlaywrightWebDriver } from '../drivers/web/playwright';
 import { createMobileDriver } from '../drivers/mobile';
 import { VarBus } from '../bridge/varBus';
@@ -95,6 +95,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(CHANNELS.WEB_SCRIPTS_MKDIR, (_e, { path: p }: { path: string }) =>
     scriptsService.get().mkdir('web', p),
   );
+  ipcMain.handle(CHANNELS.WEB_SCRIPTS_MOVE, (_e, { moves }: { moves: ScriptMoveRequest[] }) =>
+    scriptsService.get().move('web', moves),
+  );
 
   /* ── Mobile ──────────────────────────────────────────────────────── */
   ipcMain.handle(CHANNELS.MOBILE_TOOLING_STATUS, () => mobile.toolingStatus());
@@ -154,6 +157,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   );
   ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_MKDIR, (_e, { path: p }: { path: string }) =>
     scriptsService.get().mkdir('mobile', p),
+  );
+  ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_MOVE, (_e, { moves }: { moves: ScriptMoveRequest[] }) =>
+    scriptsService.get().move('mobile', moves),
   );
 
   /* ── Variables ───────────────────────────────────────────────────── */

@@ -7,7 +7,12 @@ import type {
   MobileSessionStatus,
   ToolingStatus,
 } from '@shared/types/mobile';
-import type { ScriptFile, ScriptFileBody } from '@shared/types/web';
+import type {
+  ScriptFile,
+  ScriptFileBody,
+  ScriptMoveRequest,
+  ScriptMoveResult,
+} from '@shared/types/web';
 import { invoke, subscribe } from '@/services/ipc';
 import { CHANNELS } from '@shared/ipc/channels';
 
@@ -49,6 +54,7 @@ interface MobileState {
   saveScript: (body: ScriptFileBody) => Promise<void>;
   deleteScript: (path: string) => Promise<void>;
   mkdirScript: (path: string) => Promise<void>;
+  moveScripts: (moves: ScriptMoveRequest[]) => Promise<ScriptMoveResult>;
   setCurrentScript: (body: ScriptFileBody | null) => void;
 }
 
@@ -198,6 +204,19 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   mkdirScript: async (path) => {
     const scripts = await invoke(CHANNELS.MOBILE_SCRIPTS_MKDIR, { path });
     set({ scripts });
+  },
+
+  moveScripts: async (moves) => {
+    try {
+      const scripts = await invoke(CHANNELS.MOBILE_SCRIPTS_MOVE, { moves });
+      set({ scripts });
+      return { ok: true };
+    } catch (e) {
+      const err = e as { message?: string; conflicts?: string[] };
+      const message = err.message ?? String(e);
+      const conflicts = Array.isArray(err.conflicts) ? err.conflicts : [];
+      return { ok: false, error: message, conflicts };
+    }
   },
 
   setCurrentScript: (body) => set({ currentScript: body }),

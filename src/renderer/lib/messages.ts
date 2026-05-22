@@ -35,6 +35,7 @@ const en = {
   'common.confirm': 'Confirm',
   'common.copy': 'Copy',
   'common.copied': 'Copied',
+  'common.move': 'Move',
 
   // titlebar / app shell
   'titlebar.brand': 'Hermetra',
@@ -137,6 +138,8 @@ const en = {
   'web.code.folderNamePrompt': 'folder-name',
   'web.code.untitled': 'untitled.ts',
   'web.code.empty': 'No scripts yet.',
+  'web.code.move.conflict': 'A file or folder with the same name already exists.',
+  'web.code.move.cannotIntoSelf': 'Cannot move a folder into itself or its descendants.',
 
   // mobile — devices
   'mobile.devices.title': 'Devices',
@@ -289,6 +292,7 @@ const ko: Record<keyof typeof en, string> = {
   'common.confirm': '확인',
   'common.copy': '복사',
   'common.copied': '복사됨',
+  'common.move': '이동',
 
   // titlebar
   'titlebar.brand': 'Hermetra',
@@ -390,6 +394,8 @@ const ko: Record<keyof typeof en, string> = {
   'web.code.folderNamePrompt': 'folder-name',
   'web.code.untitled': 'untitled.ts',
   'web.code.empty': '아직 스크립트가 없습니다.',
+  'web.code.move.conflict': '이미 같은 이름의 파일 또는 폴더가 존재합니다.',
+  'web.code.move.cannotIntoSelf': '폴더를 자기 자신 또는 자손에 옮길 수 없습니다.',
 
   // mobile — devices
   'mobile.devices.title': '디바이스',

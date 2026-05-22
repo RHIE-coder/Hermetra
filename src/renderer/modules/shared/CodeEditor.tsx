@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   FileCode,
@@ -154,6 +156,7 @@ export function CodeEditor({
   onMkdir,
   onSelectNew,
   onRun,
+  onMove,
 }: Props) {
   const t = useT();
   const { resolvedTheme } = useTheme();
@@ -163,6 +166,14 @@ export function CodeEditor({
   const [menuParent, setMenuParent] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingCreate | null>(null);
   const [pendingName, setPendingName] = useState('');
+  // ── scripts-tree-dnd state ─────────────────────────────────────────
+  const [selection, setSelection] = useState<Set<string>>(() => new Set());
+  const lastClickedRef = useRef<string | null>(null);
+  const [dragging, setDragging] = useState<Set<string>>(() => new Set());
+  const [moveError, setMoveError] = useState<{ conflicts: string[]; message: string } | null>(
+    null,
+  );
+  const expandTimerRef = useRef<{ path: string; id: ReturnType<typeof setTimeout> } | null>(null);
   const language = detectLanguage(draft?.path);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -181,11 +192,22 @@ export function CodeEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.path]);
 
-  // Auto-pick the first file when nothing is loaded yet.
+  // Auto-pick the first file when nothing is loaded yet. Also expand the
+  // ancestor folders so the picked file (and any siblings along the way)
+  // are visible in the tree — drag-and-drop tests rely on those rows being
+  // queryable on initial render.
   useEffect(() => {
     if (current) return;
     const firstFile = scripts.find((s) => s.type === 'file');
-    if (firstFile) void onLoad(firstFile.path);
+    if (!firstFile) return;
+    void onLoad(firstFile.path);
+    const parts = firstFile.path.split('/');
+    if (parts.length <= 1) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (let i = 1; i < parts.length; i++) next.add(parts.slice(0, i).join('/'));
+      return next;
+    });
   }, [current, scripts, onLoad]);
 
   useEffect(() => {
@@ -263,6 +285,163 @@ export function CodeEditor({
     setExpanded(next);
   };
 
+  // Flattened tree order respecting current expansion state. Used as the
+  // canonical sequence for Shift-click range selection. Folders that are
+  // collapsed do not contribute their descendants — the user reasons about
+  // selection in terms of what they can see.
+  const visibleFlatPaths = useMemo<string[]>(() => {
+    const out: string[] = [];
+    const walk = (nodes: TreeNode[]) => {
+      for (const n of nodes) {
+        out.push(n.path);
+        if (n.type === 'folder' && expanded.has(n.path)) walk(n.children);
+      }
+    };
+    walk(tree);
+    return out;
+  }, [tree, expanded]);
+
+  const handleRowClick = (node: TreeNode, e: ReactMouseEvent) => {
+    const path = node.path;
+    if (e.shiftKey && lastClickedRef.current) {
+      // Range select from lastClicked to clicked path in flat order.
+      const anchor = lastClickedRef.current;
+      const a = visibleFlatPaths.indexOf(anchor);
+      const b = visibleFlatPaths.indexOf(path);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        const range = visibleFlatPaths.slice(lo, hi + 1);
+        setSelection(new Set([...selection, ...range]));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      const next = new Set(selection);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      setSelection(next);
+      lastClickedRef.current = path;
+      return;
+    }
+    // Plain click: replace selection, then perform the type's default action.
+    setSelection(new Set([path]));
+    lastClickedRef.current = path;
+    if (node.type === 'folder') toggleFolder(path);
+    else void onLoad(path);
+  };
+
+  const isDescendantOrSelf = (parent: string, candidate: string) => {
+    if (parent === candidate) return true;
+    if (parent === '') return false;
+    return candidate.startsWith(parent + '/');
+  };
+
+  const clearExpandTimer = () => {
+    if (expandTimerRef.current) {
+      clearTimeout(expandTimerRef.current.id);
+      expandTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => () => clearExpandTimer(), []);
+
+  const startExpandTimer = (folderPath: string) => {
+    if (folderPath === '') return;
+    if (expandTimerRef.current?.path === folderPath) return;
+    clearExpandTimer();
+    const id = setTimeout(() => {
+      setExpanded((prev) => {
+        if (prev.has(folderPath)) return prev;
+        const next = new Set(prev);
+        next.add(folderPath);
+        return next;
+      });
+      expandTimerRef.current = null;
+    }, 600);
+    expandTimerRef.current = { path: folderPath, id };
+  };
+
+  const computeDraggedPaths = (originPath: string): string[] => {
+    if (selection.has(originPath)) return Array.from(selection);
+    return [originPath];
+  };
+
+  const isInvalidDrop = (paths: string[], targetFolder: string): boolean => {
+    // Any folder being dragged cannot be dropped into itself or its descendants.
+    for (const p of paths) {
+      if (isDescendantOrSelf(p, targetFolder)) return true;
+    }
+    return false;
+  };
+
+  const handleDragStart = (node: TreeNode, e: ReactDragEvent<Element>) => {
+    if (!onMove) return;
+    const paths = computeDraggedPaths(node.path);
+    setDragging(new Set(paths));
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('application/x-hermetra-scripts', JSON.stringify(paths));
+    } catch {
+      /* happy-dom may not support setData; we keep paths in component state. */
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDragging(new Set());
+    clearExpandTimer();
+  };
+
+  const handleDragOverFolder = (
+    targetFolder: string,
+    e: ReactDragEvent<Element>,
+  ) => {
+    if (!onMove) return;
+    const paths = Array.from(dragging);
+    if (paths.length > 0 && isInvalidDrop(paths, targetFolder)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnterFolder = (targetFolder: string) => {
+    if (!onMove) return;
+    if (targetFolder === '') return;
+    const paths = Array.from(dragging);
+    if (paths.length > 0 && isInvalidDrop(paths, targetFolder)) return;
+    if (!expanded.has(targetFolder)) startExpandTimer(targetFolder);
+  };
+
+  const handleDragLeaveFolder = (targetFolder: string) => {
+    if (expandTimerRef.current?.path === targetFolder) clearExpandTimer();
+  };
+
+  const handleDrop = async (
+    targetFolder: string,
+    e: ReactDragEvent<Element>,
+  ) => {
+    if (!onMove) return;
+    e.preventDefault();
+    e.stopPropagation();
+    clearExpandTimer();
+    const paths = Array.from(dragging);
+    if (paths.length === 0) return;
+    if (isInvalidDrop(paths, targetFolder)) {
+      setDragging(new Set());
+      return;
+    }
+    const moves: ScriptMoveRequest[] = paths.map((from) => {
+      const name = from.split('/').pop() ?? from;
+      const to = targetFolder === '' ? name : `${targetFolder}/${name}`;
+      return { from, to };
+    });
+    setDragging(new Set());
+    const result = await onMove(moves);
+    if (result.ok) {
+      setMoveError(null);
+    } else {
+      setMoveError({ conflicts: result.conflicts, message: result.error });
+    }
+  };
+
   const handleDelete = async (node: TreeNode) => {
     const key: MessageKey =
       node.type === 'folder' ? 'web.code.deleteFolderConfirm' : 'web.code.deleteFileConfirm';
@@ -282,18 +461,31 @@ export function CodeEditor({
   };
 
   const renderNode = (node: TreeNode, depth: number) => {
+    const isDimmed = dragging.has(node.path);
+    const isSelected = selection.has(node.path);
     if (node.type === 'folder') {
       const isOpen = expanded.has(node.path);
       return (
         <li key={`folder:${node.path}`} className="group">
           <div
-            className="flex items-center gap-1 rounded-md hover:bg-accent"
+            data-drag-path={node.path}
+            data-drop-target={node.path}
+            draggable
+            onDragStart={(e) => handleDragStart(node, e)}
+            onDragEnd={handleDragEnd}
+            onDragEnter={() => handleDragEnterFolder(node.path)}
+            onDragOver={(e) => handleDragOverFolder(node.path, e)}
+            onDragLeave={() => handleDragLeaveFolder(node.path)}
+            onDrop={(e) => void handleDrop(node.path, e)}
+            onClick={(e) => handleRowClick(node, e)}
+            className={cn(
+              'flex items-center gap-1 rounded-md hover:bg-accent',
+              isSelected && 'bg-accent',
+              isDimmed && 'opacity-50',
+            )}
             style={{ paddingLeft: 4 + depth * 12 }}
           >
-            <button
-              onClick={() => toggleFolder(node.path)}
-              className="flex-1 flex items-center gap-1.5 px-1.5 py-1.5 text-left text-xs"
-            >
+            <span className="flex-1 flex items-center gap-1.5 px-1.5 py-1.5 text-left text-xs">
               {isOpen ? (
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
               ) : (
@@ -305,7 +497,7 @@ export function CodeEditor({
                 <Folder className="h-3.5 w-3.5 text-muted-foreground" />
               )}
               <span className="truncate font-mono">{node.name}</span>
-            </button>
+            </span>
             <button
               data-menu-trigger={node.path}
               onClick={(e) => {
@@ -341,19 +533,22 @@ export function CodeEditor({
     return (
       <li key={`file:${node.path}`} className="group">
         <div
+          data-drag-path={node.path}
+          draggable
+          onDragStart={(e) => handleDragStart(node, e)}
+          onDragEnd={handleDragEnd}
+          onClick={(e) => handleRowClick(node, e)}
           className={cn(
             'flex items-center gap-1 rounded-md hover:bg-accent',
-            draft?.path === node.path && 'bg-accent',
+            (draft?.path === node.path || isSelected) && 'bg-accent',
+            isDimmed && 'opacity-50',
           )}
           style={{ paddingLeft: 4 + depth * 12 }}
         >
-          <button
-            onClick={() => void onLoad(node.path)}
-            className="flex-1 flex items-center gap-1.5 px-1.5 py-1.5 text-left text-xs"
-          >
+          <span className="flex-1 flex items-center gap-1.5 px-1.5 py-1.5 text-left text-xs">
             <FileCode className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="truncate font-mono">{node.name}</span>
-          </button>
+          </span>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -464,7 +659,39 @@ export function CodeEditor({
               <div className="absolute right-2 top-9 z-20">{renderMenu('', 0)}</div>
             )}
           </div>
-          <ul className="flex-1 overflow-y-auto p-1">
+          {moveError && (
+            <div
+              data-testid="script-move-error"
+              className="flex items-start gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <div className="flex-1 break-words">
+                <div>
+                  {moveError.conflicts.length > 0
+                    ? t('web.code.move.conflict')
+                    : moveError.message}
+                </div>
+                {moveError.conflicts.length > 0 && (
+                  <div className="mt-1 font-mono break-all">
+                    {moveError.conflicts.join(' · ')}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setMoveError(null)}
+                className="opacity-70 hover:opacity-100"
+                title={t('common.cancel')}
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <ul
+            data-drop-target=""
+            onDragOver={(e) => handleDragOverFolder('', e)}
+            onDrop={(e) => void handleDrop('', e)}
+            className="flex-1 overflow-y-auto p-1"
+          >
             {pending?.parent === '' && renderPendingRow(0)}
             {tree.length === 0 && pending?.parent !== '' ? (
               <li className="px-3 py-2 text-xs text-muted-foreground">{t('web.code.empty')}</li>
