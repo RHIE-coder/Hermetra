@@ -1,4 +1,6 @@
+import { spawn } from 'node:child_process';
 import type { AppleSigningIdentity } from '@shared/types/mobile';
+import { parseAppleCertsOutput } from './apple-certs-parser';
 
 /**
  * macOS-only Apple signing-identity reader. Calls `security find-identity -v
@@ -21,10 +23,48 @@ export interface AppleCertsDeps {
   runSecurity: () => Promise<string>;
 }
 
-export function createAppleCertsService(_deps: AppleCertsDeps): AppleCertsService {
+export function createAppleCertsService(deps: AppleCertsDeps): AppleCertsService {
   return {
     async list() {
-      throw new Error('not implemented: AppleCertsService.list');
+      if (deps.platform !== 'darwin') return { identities: [] };
+      try {
+        const stdout = await deps.runSecurity();
+        return { identities: parseAppleCertsOutput(stdout) };
+      } catch {
+        return { identities: [] };
+      }
     },
   };
+}
+
+function defaultRunSecurity(): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const proc = spawn('security', ['find-identity', '-v', '-p', 'codesigning']);
+    let stdout = '';
+    proc.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString('utf-8');
+    });
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`security exited with code ${code ?? 'unknown'}`));
+    });
+  });
+}
+
+let inst: AppleCertsService | null = null;
+
+/**
+ * Lazy singleton accessor for production wiring. Uses `process.platform` and
+ * the real `security` CLI by default. Tests use `createAppleCertsService`
+ * directly with injected deps.
+ */
+export function appleCertsService(): AppleCertsService {
+  if (!inst) {
+    inst = createAppleCertsService({
+      platform: process.platform,
+      runSecurity: defaultRunSecurity,
+    });
+  }
+  return inst;
 }

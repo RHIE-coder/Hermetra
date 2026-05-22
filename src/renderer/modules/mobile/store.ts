@@ -138,23 +138,14 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   selectDevice: (key: string | null) => set({ selectedDeviceKey: key }),
 
   init: async () => {
-    const [tooling, appium, devices, capabilities, session, scripts] = await Promise.all([
+    const [tooling, appium, devices, session, scripts] = await Promise.all([
       invoke(CHANNELS.MOBILE_TOOLING_STATUS),
       invoke(CHANNELS.MOBILE_APPIUM_STATUS),
       invoke(CHANNELS.MOBILE_LIST_DEVICES),
-      invoke(CHANNELS.MOBILE_LIST_CAPABILITIES),
       invoke(CHANNELS.MOBILE_SESSION_STATUS),
       invoke(CHANNELS.MOBILE_SCRIPTS_LIST),
     ]);
-    set({
-      tooling,
-      appium,
-      devices,
-      capabilities,
-      session,
-      scripts,
-      activeCapabilityId: capabilities[0]?.id ?? null,
-    });
+    set({ tooling, appium, devices, session, scripts });
 
     if (subscribed) return;
     subscribed = true;
@@ -213,24 +204,47 @@ export const useMobileStore = create<MobileState>((set, get) => ({
     return result;
   },
 
-  /* P4 — connection actions. Stub bodies; implementer fills in. */
+  /* P4 — connection actions (per-workspace). */
   refreshConnections: async () => {
-    throw new Error('not implemented: refreshConnections');
+    try {
+      const { connections, activeId } = await invoke(CHANNELS.CONN_LIST);
+      set({ connections, activeConnectionId: activeId });
+    } catch {
+      /* bridge unavailable (e.g. happy-dom test without preload) — leave state. */
+    }
   },
-  saveConnection: async () => {
-    throw new Error('not implemented: saveConnection');
+
+  saveConnection: async (connection) => {
+    await invoke(CHANNELS.CONN_SAVE, { connection });
+    const { connections, activeId } = await invoke(CHANNELS.CONN_LIST);
+    set({ connections, activeConnectionId: activeId });
   },
-  removeConnection: async () => {
-    throw new Error('not implemented: removeConnection');
+
+  removeConnection: async (id) => {
+    await invoke(CHANNELS.CONN_REMOVE, { id });
+    const { connections, activeId } = await invoke(CHANNELS.CONN_LIST);
+    set({ connections, activeConnectionId: activeId });
   },
-  useConnection: async () => {
-    throw new Error('not implemented: useConnection');
+
+  useConnection: async (id) => {
+    await invoke(CHANNELS.CONN_USE, { id });
+    const { connections, activeId } = await invoke(CHANNELS.CONN_LIST);
+    set({ connections, activeConnectionId: activeId });
   },
-  testConnection: async () => {
-    throw new Error('not implemented: testConnection');
+
+  testConnection: async (id) => {
+    const result = await invoke(CHANNELS.CONN_TEST, { id });
+    set({ lastTest: result });
+    return result;
   },
+
   listAppleCerts: async () => {
-    throw new Error('not implemented: listAppleCerts');
+    try {
+      const { identities } = await invoke(CHANNELS.APPLE_CERTS_LIST);
+      set({ appleIdentities: identities });
+    } catch {
+      /* bridge unavailable (e.g. happy-dom test without preload) — leave state. */
+    }
   },
 
   startSession: async (capabilityId) => {

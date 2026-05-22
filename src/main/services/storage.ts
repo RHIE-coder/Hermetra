@@ -5,11 +5,17 @@ import type { UrlBookmark } from '@shared/types/web';
 import type { Scenario } from '@shared/types/bridge';
 import { workspaceManager } from './workspaceManager';
 
+/**
+ * Persisted shape of `<workspaceDir>/store.json`.
+ *
+ * P4 (devices-connection-config) replaced the legacy `capabilities[]` /
+ * `activeCapabilityId` fields with `connections[]` / `activeConnectionId`.
+ * Read-side tolerates the legacy fields (they're silently dropped); write-side
+ * never re-emits them.
+ */
 interface StoreShape {
   bookmarks: UrlBookmark[];
-  capabilities: Capability[];
   scenarios: Scenario[];
-  // P4 (devices-connection-config) — per-workspace connection configs.
   connections: Connection[];
   activeConnectionId: string | null;
 }
@@ -19,7 +25,6 @@ const DEFAULTS: StoreShape = {
     { id: 'bm-1', name: 'Example', url: 'https://example.com' },
     { id: 'bm-2', name: 'Playwright Docs', url: 'https://playwright.dev' },
   ],
-  capabilities: [],
   scenarios: [
     {
       id: 'sample-handoff',
@@ -57,11 +62,10 @@ function read(): StoreShape {
       const parsed = JSON.parse(fs.readFileSync(fp, 'utf-8')) as Partial<StoreShape>;
       return {
         bookmarks: parsed.bookmarks ?? DEFAULTS.bookmarks,
-        capabilities: parsed.capabilities ?? DEFAULTS.capabilities,
         scenarios: parsed.scenarios ?? DEFAULTS.scenarios,
-        // P4 fields — implementer adds the read+write here.
-        connections: DEFAULTS.connections,
-        activeConnectionId: DEFAULTS.activeConnectionId,
+        connections: Array.isArray(parsed.connections) ? parsed.connections : [],
+        activeConnectionId:
+          typeof parsed.activeConnectionId === 'string' ? parsed.activeConnectionId : null,
       };
     }
   } catch {
@@ -87,13 +91,17 @@ export const memoryStore = {
     data.bookmarks = v;
     write(data);
   },
+  /**
+   * Legacy capability accessor. P4 retired the capabilities concept in favour
+   * of connection configs. The getter always returns `[]` (the field is no
+   * longer persisted) and the setter is a no-op so consumers that still call
+   * it survive without re-emitting the legacy key to disk.
+   */
   get capabilities(): Capability[] {
-    return read().capabilities;
+    return [];
   },
-  set capabilities(v: Capability[]) {
-    const data = read();
-    data.capabilities = v;
-    write(data);
+  set capabilities(_v: Capability[]) {
+    /* no-op — P4 retired this field. */
   },
   get scenarios(): Scenario[] {
     return read().scenarios;
@@ -104,16 +112,20 @@ export const memoryStore = {
     write(data);
   },
   get connections(): Connection[] {
-    throw new Error('not implemented: memoryStore.connections (P4 devices-connection-config)');
+    return read().connections;
   },
-  set connections(_v: Connection[]) {
-    throw new Error('not implemented: memoryStore.connections (P4 devices-connection-config)');
+  set connections(v: Connection[]) {
+    const data = read();
+    data.connections = v;
+    write(data);
   },
   get activeConnectionId(): string | null {
-    throw new Error('not implemented: memoryStore.activeConnectionId (P4 devices-connection-config)');
+    return read().activeConnectionId;
   },
-  set activeConnectionId(_v: string | null) {
-    throw new Error('not implemented: memoryStore.activeConnectionId (P4 devices-connection-config)');
+  set activeConnectionId(v: string | null) {
+    const data = read();
+    data.activeConnectionId = v;
+    write(data);
   },
   removeScenario(id: string): Scenario[] {
     const data = read();

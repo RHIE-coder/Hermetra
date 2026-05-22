@@ -1,7 +1,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron';
 import { CHANNELS } from '@shared/ipc/channels';
 import type { Scenario } from '@shared/types/bridge';
-import type { Capability, SavedDevice } from '@shared/types/mobile';
+import type { Capability, Connection, SavedDevice } from '@shared/types/mobile';
 import type { ScriptFileBody, ScriptMoveRequest, UrlBookmark } from '@shared/types/web';
 import { createPlaywrightWebDriver } from '../drivers/web/playwright';
 import { createMobileDriver } from '../drivers/mobile';
@@ -13,6 +13,8 @@ import { memoryStore } from '../services/storage';
 import { scriptsService } from '../services/scripts';
 import { workspaceManager } from '../services/workspaceManager';
 import { myDevicesService } from '../services/myDevices';
+import { connectionsService } from '../services/connections';
+import { appleCertsService } from '../services/appleCerts';
 import { BrowserInstaller } from '../services/browserInstall';
 import type { Workspace } from '@shared/types/workspace';
 
@@ -162,6 +164,22 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
     const apps = await mobile.listInstalledApps(deviceId);
     return { apps };
   });
+
+  /* ── Mobile — Connection configs (per-workspace) — P4 ────────────── */
+  ipcMain.handle(CHANNELS.CONN_LIST, () => connectionsService(workspace.activeDir()).list());
+  ipcMain.handle(CHANNELS.CONN_SAVE, (_e, { connection }: { connection: Connection }) =>
+    connectionsService(workspace.activeDir()).save(connection),
+  );
+  ipcMain.handle(CHANNELS.CONN_REMOVE, (_e, { id }: { id: string }) =>
+    connectionsService(workspace.activeDir()).remove(id),
+  );
+  ipcMain.handle(CHANNELS.CONN_USE, (_e, { id }: { id: string | null }) =>
+    connectionsService(workspace.activeDir()).use(id),
+  );
+  ipcMain.handle(CHANNELS.CONN_TEST, (_e, { id }: { id: string }) =>
+    connectionsService(workspace.activeDir()).test(id),
+  );
+  ipcMain.handle(CHANNELS.APPLE_CERTS_LIST, () => appleCertsService().list());
 
   /* ── Mobile Scripts ──────────────────────────────────────────────── */
   ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_LIST, () => scriptsService.get().list('mobile'));
