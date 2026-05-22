@@ -116,6 +116,36 @@ export interface ConnectionTestResult {
 }
 
 /**
+ * One node in the inspector element tree, returned by the native or webview
+ * page-source parser. Used both by the IPC handler (`INSPECTOR_GET_ELEMENTS`)
+ * and by the renderer to power the hit-test overlay and the detail panel.
+ *
+ * - `id` is hierarchical: `native:<i>:<j>:...` or `webview:<i>:<j>:...`. The
+ *   root prefix lets the renderer keep both trees in one selectedElementId
+ *   slot without collisions.
+ * - `bounds` is `null` when the source has no rect attributes (e.g. the
+ *   `<hierarchy>` root wrapper). The hit-test ignores those nodes.
+ */
+export interface InspectorElement {
+  id: string;
+  tag: string;
+  attributes: Record<string, string>;
+  bounds: { x: number; y: number; w: number; h: number } | null;
+  children: InspectorElement[];
+}
+
+/**
+ * Live state of the inspector session. Held in the mobile store. Never
+ * persisted — restarting the app empties it (matches the session lifecycle).
+ */
+export interface InspectorSessionState {
+  active: boolean;
+  recording: boolean;
+  /** 'native' or 'WEBVIEW_<bundle>' or null when inactive. */
+  context: 'native' | string | null;
+}
+
+/**
  * A device the user has explicitly saved to their "My Devices" list.
  *
  * Stored in `<userData>/devices.json` (global, not per-workspace). Separate

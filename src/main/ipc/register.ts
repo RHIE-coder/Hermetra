@@ -5,6 +5,10 @@ import type { Capability, Connection, SavedDevice } from '@shared/types/mobile';
 import type { ScriptFileBody, ScriptMoveRequest, UrlBookmark } from '@shared/types/web';
 import { createPlaywrightWebDriver } from '../drivers/web/playwright';
 import { createMobileDriver } from '../drivers/mobile';
+import {
+  parseNativePageSource,
+  parseWebviewPageSource,
+} from '../drivers/mobile/inspector-parser';
 import { VarBus } from '../bridge/varBus';
 import { BridgeEventBus } from '../bridge/eventBus';
 import { ScenarioOrchestrator } from '../bridge/orchestrator';
@@ -180,6 +184,55 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
     connectionsService(workspace.activeDir()).test(id),
   );
   ipcMain.handle(CHANNELS.APPLE_CERTS_LIST, () => appleCertsService().list());
+
+  /* ── Mobile — Inspector (P5) ─────────────────────────────────────── */
+  ipcMain.handle(CHANNELS.INSPECTOR_START_SESSION, async () => {
+    try {
+      await mobile.startInspector();
+      return { ok: true as const };
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+  ipcMain.handle(CHANNELS.INSPECTOR_STOP_SESSION, async () => {
+    await mobile.stopSession();
+    return { ok: true as const };
+  });
+  ipcMain.handle(CHANNELS.INSPECTOR_SCREENSHOT, () => mobile.screenshot());
+  ipcMain.handle(CHANNELS.INSPECTOR_START_RECORD, async () => {
+    await mobile.startRecording();
+    return { ok: true as const };
+  });
+  ipcMain.handle(CHANNELS.INSPECTOR_STOP_RECORD, async () => {
+    const { dataUrl } = await mobile.stopRecording();
+    return { dataUrl };
+  });
+  ipcMain.handle(CHANNELS.INSPECTOR_SET_CONTEXT, async (_e, { context }: { context: 'native' | string }) => {
+    await mobile.setContext(context);
+    return { ok: true as const };
+  });
+  ipcMain.handle(CHANNELS.INSPECTOR_GET_ELEMENTS, async () => {
+    const nativeXml = await mobile.getPageSource('native');
+    const native = parseNativePageSource(nativeXml);
+    const contexts = await mobile.getContexts();
+    const webviewContext = contexts.find((c) => c.startsWith('WEBVIEW_'));
+    let webview: ReturnType<typeof parseWebviewPageSource> = [];
+    if (webviewContext) {
+      try {
+        await mobile.setContext(webviewContext);
+        const html = await mobile.getPageSource(webviewContext);
+        webview = parseWebviewPageSource(html);
+      } finally {
+        // Restore native context so subsequent script runs default to native.
+        try {
+          await mobile.setContext('NATIVE_APP');
+        } catch {
+          /* best-effort — ignore */
+        }
+      }
+    }
+    return { native, webview };
+  });
 
   /* ── Mobile Scripts ──────────────────────────────────────────────── */
   ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_LIST, () => scriptsService.get().list('mobile'));

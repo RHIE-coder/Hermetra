@@ -25,6 +25,7 @@ import type {
   Connection,
   ConnectionTestResult,
   AppleSigningIdentity,
+  InspectorElement,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
 import type {
@@ -98,6 +99,15 @@ export const CHANNELS = {
   CONN_USE: 'mobile:connection:use',
   CONN_TEST: 'mobile:connection:test',
   APPLE_CERTS_LIST: 'mobile:apple:certs:list',
+
+  // Mobile — Inspector (mobile-inspector-page / P5)
+  INSPECTOR_START_SESSION: 'mobile:inspector:start',
+  INSPECTOR_STOP_SESSION: 'mobile:inspector:stop',
+  INSPECTOR_SCREENSHOT: 'mobile:inspector:screenshot',
+  INSPECTOR_START_RECORD: 'mobile:inspector:record:start',
+  INSPECTOR_STOP_RECORD: 'mobile:inspector:record:stop',
+  INSPECTOR_GET_ELEMENTS: 'mobile:inspector:elements',
+  INSPECTOR_SET_CONTEXT: 'mobile:inspector:context',
 
   // Mobile — Scripts
   MOBILE_SCRIPTS_LIST: 'mobile:scripts:list',
@@ -203,6 +213,17 @@ export interface IpcContract {
   [CHANNELS.CONN_USE]: { input: { id: string | null }; output: { ok: true } };
   [CHANNELS.CONN_TEST]: { input: { id: string }; output: ConnectionTestResult };
   [CHANNELS.APPLE_CERTS_LIST]: { input: void; output: { identities: AppleSigningIdentity[] } };
+
+  [CHANNELS.INSPECTOR_START_SESSION]: { input: void; output: { ok: true } | { ok: false; error: string } };
+  [CHANNELS.INSPECTOR_STOP_SESSION]: { input: void; output: { ok: true } };
+  [CHANNELS.INSPECTOR_SCREENSHOT]: { input: void; output: { dataUrl: string } };
+  [CHANNELS.INSPECTOR_START_RECORD]: { input: void; output: { ok: true } };
+  [CHANNELS.INSPECTOR_STOP_RECORD]: { input: void; output: { dataUrl: string } };
+  [CHANNELS.INSPECTOR_GET_ELEMENTS]: {
+    input: void;
+    output: { native: InspectorElement[]; webview: InspectorElement[] };
+  };
+  [CHANNELS.INSPECTOR_SET_CONTEXT]: { input: { context: 'native' | string }; output: { ok: true } };
 
   [CHANNELS.MOBILE_SCRIPTS_LIST]: { input: void; output: ScriptFile[] };
   [CHANNELS.MOBILE_SCRIPTS_READ]: { input: { path: string }; output: ScriptFileBody };

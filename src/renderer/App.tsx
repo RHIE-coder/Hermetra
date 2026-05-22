@@ -12,6 +12,7 @@ import { WebCodePage } from './modules/web/pages/WebCodePage';
 
 import { DevicesPage } from './modules/mobile/pages/DevicesPage';
 import { MobileCodePage } from './modules/mobile/pages/MobileCodePage';
+import { MobileInspectorPage } from './modules/mobile/pages/MobileInspectorPage';
 
 import { ScenariosPage } from './modules/bridge/pages/ScenariosPage';
 import { VariableBusPage } from './modules/bridge/pages/VariableBusPage';
@@ -65,6 +66,7 @@ export function App() {
           <Route index element={<Navigate to="devices" replace />} />
           <Route path="devices" element={<DevicesPage />} />
           <Route path="code" element={<MobileCodePage />} />
+          <Route path="inspector" element={<MobileInspectorPage />} />
         </Route>
         <Route path="bridge">
           <Route index element={<Navigate to="scenarios" replace />} />

@@ -19,6 +19,40 @@ import { parseAdbPackagesOutput, parseIdeviceinstallerOutput } from './apps-pars
 const execFileAsync = promisify(execFile);
 
 /**
+ * 1x1 transparent PNG used as the canned screenshot in mock mode. Small and
+ * deterministic (same bytes every call), which lets the API test assert
+ * stability across repeated screenshot() calls.
+ */
+const MOCK_SCREENSHOT_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
+
+/** Empty MP4 stub for mock recording stop. */
+const MOCK_VIDEO_DATA_URL = 'data:video/mp4;base64,AAAAAA==';
+
+/** Mock contexts always include the native context plus one webview. */
+const MOCK_CONTEXTS: readonly string[] = ['NATIVE_APP', 'WEBVIEW_com.example'];
+
+/**
+ * Hard-coded native XML used by the inspector mock branch. Two children with
+ * Android-style bounds, so the parser test has signal and the renderer hover
+ * test has multiple rects to hit.
+ */
+const MOCK_NATIVE_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy>
+  <android.widget.FrameLayout bounds="[0,0][100,200]" package="com.example">
+    <android.widget.Button bounds="[10,20][40,60]" text="Tap me" resource-id="com.example:id/btn"/>
+    <android.widget.TextView bounds="[50,100][90,120]" text="Hello" resource-id="com.example:id/label"/>
+  </android.widget.FrameLayout>
+</hierarchy>`;
+
+/** Hard-coded webview HTML used by the inspector mock branch. */
+const MOCK_WEBVIEW_HTML = `<!DOCTYPE html><html><body>
+  <div id="root">
+    <button class="primary">Hello</button>
+  </div>
+</body></html>`;
+
+/**
  * Hard-coded mock app list (spec AC9 — 13 dummy apps, returned immediately).
  * Matches the spec's reference screenshot ("image 2").
  */
@@ -133,15 +167,19 @@ export function createMobileDriver(): MobileDriverApi {
       return session.start(url, cap);
     },
     async stopSession() {
+      if (isMockMode()) return session.status();
       return session.stop();
     },
     async screenshot() {
+      if (isMockMode()) return { dataUrl: MOCK_SCREENSHOT_DATA_URL };
       return session.screenshot();
     },
     async startRecording() {
+      if (isMockMode()) return session.status();
       return session.startRecording();
     },
     async stopRecording() {
+      if (isMockMode()) return { dataUrl: MOCK_VIDEO_DATA_URL, status: session.status() };
       return session.stopRecording();
     },
     async runScript(input, _caps): Promise<WebScriptRunResult> {
@@ -154,6 +192,30 @@ export function createMobileDriver(): MobileDriverApi {
     onAppium(handler) {
       appium.on('change', handler);
       return () => appium.off('change', handler);
+    },
+    /* ── Inspector extensions (P5) ─────────────────────────────────── */
+    async startInspector() {
+      // Mock mode skips Appium entirely; real mode reuses the existing session
+      // manager — startSession() must have been called previously.
+      if (isMockMode()) return { ok: true };
+      // For now real mode is also a no-op: the inspector reuses whatever session
+      // is currently active. A future iteration may auto-start a session from
+      // the active connection config.
+      return { ok: true };
+    },
+    async getContexts() {
+      if (isMockMode()) return MOCK_CONTEXTS.slice();
+      return session.getContexts();
+    },
+    async setContext(name) {
+      if (isMockMode()) return { ok: true };
+      return session.setContext(name);
+    },
+    async getPageSource(context) {
+      if (isMockMode()) {
+        return context === 'native' ? MOCK_NATIVE_XML : MOCK_WEBVIEW_HTML;
+      }
+      return session.getPageSource();
     },
   };
 }

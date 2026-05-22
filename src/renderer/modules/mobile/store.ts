@@ -6,6 +6,8 @@ import type {
   CapabilityTestResult,
   Connection,
   ConnectionTestResult,
+  InspectorElement,
+  InspectorSessionState,
   InstalledApp,
   MobileDevice,
   MobileSessionStatus,
@@ -43,6 +45,13 @@ interface MobileState {
   selectedDeviceKey: string | null;
   installedApps: InstalledApp[];
   installedAppsLoading: boolean;
+  // Inspector (mobile-inspector-page / P5)
+  inspectorSession: InspectorSessionState;
+  inspectorScreenshot: string | null;
+  inspectorVideo: string | null;
+  nativeTree: InspectorElement[];
+  webviewTree: InspectorElement[];
+  selectedElementId: string | null;
 
   init: () => Promise<void>;
   refreshInstalledApps: (deviceId: string) => Promise<void>;
@@ -82,6 +91,14 @@ interface MobileState {
   mkdirScript: (path: string) => Promise<void>;
   moveScripts: (moves: ScriptMoveRequest[]) => Promise<ScriptMoveResult>;
   setCurrentScript: (body: ScriptFileBody | null) => void;
+  // Inspector actions (P5)
+  startInspectorSession: () => Promise<void>;
+  stopInspectorSession: () => Promise<void>;
+  captureInspectorScreenshot: () => Promise<void>;
+  startInspectorRecording: () => Promise<void>;
+  stopInspectorRecording: () => Promise<void>;
+  fetchInspectorElements: () => Promise<void>;
+  selectInspectorElement: (id: string | null) => void;
 }
 
 export const useMobileStore = create<MobileState>((set, get) => ({
@@ -103,6 +120,12 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   selectedDeviceKey: null,
   installedApps: [],
   installedAppsLoading: false,
+  inspectorSession: { active: false, recording: false, context: null },
+  inspectorScreenshot: null,
+  inspectorVideo: null,
+  nativeTree: [],
+  webviewTree: [],
+  selectedElementId: null,
 
   refreshInstalledApps: async (deviceId: string) => {
     set({ installedAppsLoading: true });
@@ -320,4 +343,53 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   },
 
   setCurrentScript: (body) => set({ currentScript: body }),
+
+  /* Inspector (P5). Mirrors the IPC channel surface 1:1. */
+  startInspectorSession: async () => {
+    const result = await invoke(CHANNELS.INSPECTOR_START_SESSION);
+    if (result.ok) {
+      set((s) => ({
+        inspectorSession: { ...s.inspectorSession, active: true, context: 'NATIVE_APP' },
+      }));
+    }
+  },
+
+  stopInspectorSession: async () => {
+    await invoke(CHANNELS.INSPECTOR_STOP_SESSION);
+    set({
+      inspectorSession: { active: false, recording: false, context: null },
+      inspectorScreenshot: null,
+      inspectorVideo: null,
+      nativeTree: [],
+      webviewTree: [],
+      selectedElementId: null,
+    });
+  },
+
+  captureInspectorScreenshot: async () => {
+    const { dataUrl } = await invoke(CHANNELS.INSPECTOR_SCREENSHOT);
+    set({ inspectorScreenshot: dataUrl });
+  },
+
+  startInspectorRecording: async () => {
+    await invoke(CHANNELS.INSPECTOR_START_RECORD);
+    set((s) => ({
+      inspectorSession: { ...s.inspectorSession, recording: true },
+    }));
+  },
+
+  stopInspectorRecording: async () => {
+    const { dataUrl } = await invoke(CHANNELS.INSPECTOR_STOP_RECORD);
+    set((s) => ({
+      inspectorSession: { ...s.inspectorSession, recording: false },
+      inspectorVideo: dataUrl,
+    }));
+  },
+
+  fetchInspectorElements: async () => {
+    const { native, webview } = await invoke(CHANNELS.INSPECTOR_GET_ELEMENTS);
+    set({ nativeTree: native, webviewTree: webview });
+  },
+
+  selectInspectorElement: (id) => set({ selectedElementId: id }),
 }));

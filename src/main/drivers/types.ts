@@ -48,4 +48,9 @@ export interface MobileDriverApi {
   ): Promise<WebScriptRunResult>;
   onSession(handler: (status: MobileSessionStatus) => void): () => void;
   onAppium(handler: (status: AppiumServerStatus) => void): () => void;
+  /* Inspector extensions (mobile-inspector-page / P5). */
+  startInspector(): Promise<{ ok: true }>;
+  getContexts(): Promise<string[]>;
+  setContext(name: string): Promise<{ ok: true }>;
+  getPageSource(context: 'native' | string): Promise<string>;
 }

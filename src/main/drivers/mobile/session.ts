@@ -14,6 +14,8 @@ interface WdioBrowser {
   getPageSource: () => Promise<string>;
   startRecordingScreen: (opts?: Record<string, unknown>) => Promise<unknown>;
   stopRecordingScreen: () => Promise<string>;
+  getContexts?: () => Promise<string[]>;
+  switchContext?: (name: string) => Promise<void>;
   getSession?: () => Promise<unknown>;
   $: (selector: string) => Promise<unknown>;
   pause: (ms: number) => Promise<void>;
@@ -141,6 +143,27 @@ export class MobileSessionManager extends EventEmitter {
     this.recording = false;
     this.broadcast();
     return { dataUrl: `data:video/mp4;base64,${b64}`, status: this.status() };
+  }
+
+  async getContexts(): Promise<string[]> {
+    if (!this.client) throw new Error('활성 세션이 없습니다. 먼저 세션을 시작하세요.');
+    const fn = this.client.getContexts;
+    if (typeof fn !== 'function') return ['NATIVE_APP'];
+    return fn.call(this.client);
+  }
+
+  async setContext(name: string): Promise<{ ok: true }> {
+    if (!this.client) throw new Error('활성 세션이 없습니다. 먼저 세션을 시작하세요.');
+    const fn = this.client.switchContext;
+    if (typeof fn === 'function') {
+      await fn.call(this.client, name);
+    }
+    return { ok: true };
+  }
+
+  async getPageSource(): Promise<string> {
+    if (!this.client) throw new Error('활성 세션이 없습니다. 먼저 세션을 시작하세요.');
+    return this.client.getPageSource();
   }
 
   async runScript(source: string): Promise<WebScriptRunResult> {

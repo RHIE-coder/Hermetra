@@ -50,6 +50,7 @@ const en = {
   'sidebar.web.code': 'Scripts',
   'sidebar.mobile.devices': 'Devices',
   'sidebar.mobile.code': 'Scripts',
+  'sidebar.mobile.inspector': 'Inspector',
   'sidebar.bridge.scenarios': 'Scenarios',
   'sidebar.bridge.bus': 'Shared Bus',
   'sidebar.bridge.events': 'Event Stream',
@@ -237,6 +238,26 @@ const en = {
   'mobile.code.activeCap': 'Active profile',
   'mobile.code.noCap': 'No profile selected',
 
+  // mobile — inspector (P5)
+  'mobile.inspector.title': 'Session / Elements',
+  'mobile.inspector.subtitle':
+    'Capture screen and extract elements with the active connection config.',
+  'mobile.inspector.appiumNotConnected':
+    'Appium is not connected. Connect Appium at the top of the Devices page first.',
+  'mobile.inspector.startSession': 'Start session',
+  'mobile.inspector.stopSession': 'Stop session',
+  'mobile.inspector.sessionConnected': 'Connected',
+  'mobile.inspector.sessionDisconnected': 'Disconnected',
+  'mobile.inspector.screenshot': 'Screenshot',
+  'mobile.inspector.startRecord': 'Start recording',
+  'mobile.inspector.stopRecord': 'Stop recording',
+  'mobile.inspector.extract': 'Extract elements',
+  'mobile.inspector.emptyScreenshot': 'No screenshot.',
+  'mobile.inspector.emptyElements': 'No elements.',
+  'mobile.inspector.emptyDetail': 'Select an element to see details.',
+  'mobile.inspector.hint':
+    'Hover over the screenshot to highlight; click to select.',
+
   // variables (now shared / lives under Bridge)
   'vars.title': 'Variables',
   'vars.subtitle':
@@ -353,6 +374,7 @@ const ko: Record<keyof typeof en, string> = {
   'sidebar.web.code': '스크립트',
   'sidebar.mobile.devices': '디바이스',
   'sidebar.mobile.code': '스크립트',
+  'sidebar.mobile.inspector': '인스펙터',
   'sidebar.bridge.scenarios': '시나리오',
   'sidebar.bridge.bus': '공유 버스',
   'sidebar.bridge.events': '이벤트',
@@ -535,6 +557,24 @@ const ko: Record<keyof typeof en, string> = {
   'mobile.code.subtitle': '선택된 프로파일에서 WebdriverIO + Appium 스크립트를 작성하고 실행합니다.',
   'mobile.code.activeCap': '활성 프로파일',
   'mobile.code.noCap': '선택된 프로파일이 없습니다',
+
+  // mobile — inspector (P5)
+  'mobile.inspector.title': '세션/요소',
+  'mobile.inspector.subtitle': '사용중 연결 구성으로 화면을 캡처하고 요소를 추출합니다.',
+  'mobile.inspector.appiumNotConnected':
+    'Appium이 연결되어 있지 않습니다. Devices 상단에서 Appium 연결을 먼저 완료해 주세요.',
+  'mobile.inspector.startSession': '세션 시작',
+  'mobile.inspector.stopSession': '세션 중지',
+  'mobile.inspector.sessionConnected': '연결됨',
+  'mobile.inspector.sessionDisconnected': '연결 안됨',
+  'mobile.inspector.screenshot': '스크린샷',
+  'mobile.inspector.startRecord': '녹화 시작',
+  'mobile.inspector.stopRecord': '녹화 중지',
+  'mobile.inspector.extract': '요소 추출',
+  'mobile.inspector.emptyScreenshot': '스크린샷이 없습니다.',
+  'mobile.inspector.emptyElements': '요소가 없습니다.',
+  'mobile.inspector.emptyDetail': '요소를 선택하면 상세 정보가 여기에 표시됩니다.',
+  'mobile.inspector.hint': '스크린샷 위에서 마우스를 움직이면 요소가 하이라이트됩니다. 클릭하면 선택됩니다.',
 
   // variables
   'vars.title': '변수',
