@@ -183,9 +183,14 @@ export function CodeEditor({
   }, [current, scripts, onLoad]);
 
   useEffect(() => {
-    if (!menuParent) return;
+    if (menuParent === null) return;
     const onDocClick = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuParent(null);
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      const el = target instanceof Element ? target : null;
+      const trigger = el?.closest('[data-menu-trigger]');
+      if (trigger?.getAttribute('data-menu-trigger') === menuParent) return;
+      setMenuParent(null);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -199,7 +204,8 @@ export function CodeEditor({
     return draft.path !== current.path || draft.source !== current.source;
   }, [draft, current]);
 
-  const openMenu = (parent: string) => setMenuParent(parent);
+  const toggleMenu = (parent: string) =>
+    setMenuParent((current) => (current === parent ? null : parent));
   const closeMenu = () => setMenuParent(null);
 
   const beginCreate = (kind: 'file' | 'folder', parent: string) => {
@@ -295,9 +301,10 @@ export function CodeEditor({
               <span className="truncate font-mono">{node.name}</span>
             </button>
             <button
+              data-menu-trigger={node.path}
               onClick={(e) => {
                 e.stopPropagation();
-                openMenu(node.path);
+                toggleMenu(node.path);
               }}
               className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground px-1.5"
               title={t('web.code.newItem')}
@@ -441,7 +448,8 @@ export function CodeEditor({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => openMenu('')}
+              data-menu-trigger=""
+              onClick={() => toggleMenu('')}
               title={t('web.code.newItem')}
             >
               <Plus className="h-4 w-4" />
