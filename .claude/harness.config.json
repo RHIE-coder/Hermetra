@@ -1,0 +1,67 @@
+{
+  "$schema": "./harness.config.schema.json",
+  "version": "1.0",
+  "project": {
+    "name": "hermetra",
+    "primaryLanguage": "typescript"
+  },
+  "commands": {
+    "test": "npm run test",
+    "typecheck": "npm run typecheck",
+    "build": "npm run build",
+    "coverage": "npm run test:coverage"
+  },
+  "checks": {
+    "ledger-violations": {
+      "enabled": true
+    },
+    "design-tokens": {
+      "enabled": true,
+      "extractor": "tailwind",
+      "configFile": "tailwind.config.ts",
+      "scanGlobs": ["src/**/*.tsx"]
+    },
+    "layered-imports": {
+      "enabled": true,
+      "rules": [
+        {
+          "scope": "^src/renderer/",
+          "forbid": [
+            { "pattern": "from\\s+['\"]@main/", "msg": "renderer imports from @main/" },
+            { "pattern": "from\\s+['\"]\\.\\./\\.\\./main/", "msg": "renderer imports from ../main/" },
+            { "pattern": "from\\s+['\"]src/main/", "msg": "renderer imports from src/main/" },
+            { "pattern": "from\\s+['\"]node:[a-z]+['\"]", "msg": "renderer imports node:* builtin" }
+          ]
+        },
+        {
+          "scope": "^src/renderer/modules/web/",
+          "forbid": [
+            { "pattern": "from\\s+['\"]@/modules/mobile/", "msg": "web module imports from mobile module" },
+            { "pattern": "from\\s+['\"]\\.\\./mobile/", "msg": "web module imports from mobile module" }
+          ]
+        },
+        {
+          "scope": "^src/renderer/modules/mobile/",
+          "forbid": [
+            { "pattern": "from\\s+['\"]@/modules/web/", "msg": "mobile module imports from web module" },
+            { "pattern": "from\\s+['\"]\\.\\./web/", "msg": "mobile module imports from web module" }
+          ]
+        }
+      ]
+    },
+    "i18n-pairs": {
+      "enabled": true,
+      "extractor": "messages-ts",
+      "file": "src/renderer/lib/messages.ts",
+      "locales": ["en", "ko"]
+    },
+    "coverage": {
+      "enabled": true,
+      "runner": "vitest",
+      "summaryFile": "coverage/coverage-summary.json"
+    }
+  },
+  "intake": {
+    "optionalSections": ["api-contract", "i18n", "multi-tenancy", "driver-compatibility"]
+  }
+}

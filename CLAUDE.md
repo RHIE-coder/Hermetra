@@ -186,3 +186,54 @@ If we ever move to SQLite or similar, the **DB Schema** test layer above is wher
 - **No restructure to mirror a design reference.** If a screenshot is given, change tokens/styles only — see `memory/feedback_redesign_scope.md` for the incident this rule came from.
 - **No `--no-verify`, no `--amend` on shared commits**, no force-push to `main`.
 - **One feature, one PR.** Don't bundle unrelated cleanup.
+
+---
+
+## 7. Workflow (four+1 steps, in order)
+
+Every non-trivial change goes through this loop. Trivial = rename, typo, comment.
+
+0. **`/setup`** — Run on a fresh checkout. Verifies via
+   `node .claude/scripts/preflight.mjs`; auto-fills missing dirs/seeds;
+   interviews user for `harness.config.json` if absent. Idempotent.
+1. **`/intake "<request>"`** — Requirements analysis. Loops `AskUserQuestion`
+   until the user explicitly approves. Emits a spec under `.specs/active/<slug>.md`
+   and registers Tasks. **No implementation.** See `.claude/skills/intake/`.
+2. **`/sprint <slug>`** — Auto TDD loop. Orchestrates three subagents in order:
+   - `testwriter` → smallest failing tests (Red)
+   - `implementer` → minimum code to green (Green)
+   - `auditor` → runs `npm run check` + every sweep script + ledger check
+   Loops until auditor PASS. Moves spec to `.specs/done/`. See
+   `.claude/skills/sprint/`.
+3. **`/immunize`** — Whenever the user corrects a behavior or a sweep finds a
+   repeating pattern, record it in `.claude/immunity/ledger.md`. Entries with
+   a `rule:` regex are auto-enforced by the PreToolUse hook
+   `.claude/hooks/immunity-rules-guard.mjs`. See `.claude/skills/immunize/`.
+4. **`/sweep`** — Project-wide audit. Manual trigger. Runs every check in
+   `.claude/skills/sweep/scripts/run-all.mjs`. Reports drift; offers Tasks
+   for findings. Does not auto-fix. See `.claude/skills/sweep/`.
+
+### Active immunity rules
+
+Every agent in the `/sprint` loop reads `.claude/immunity/ledger.md` first.
+Two PreToolUse hooks back this up at the tool-call level:
+
+- **`design-token-guard`** — Blocks Writes/Edits to `.tsx` that reference a
+  Tailwind color class not registered in `tailwind.config.ts`. See ledger
+  entry `design-token-fabrication`.
+- **`immunity-rules-guard`** — For each ledger entry with a `rule:` regex,
+  blocks any Write/Edit whose content matches.
+
+If a hook blocks you, do **not** rewrite the content to bypass it. Either use
+a valid token / pattern, or update the ledger entry first (via `/immunize`)
+if the rule is genuinely wrong.
+
+### Shortcuts
+
+| You want to | Command |
+|---|---|
+| Run the whole sweep | `npm run sweep` |
+| Run one check (e.g. tokens) | `npm run sweep:tokens` |
+| Run full project gate | `npm run check` |
+| Lint the ledger | `npm run lint:ledger` |
+| Preflight readiness | `npm run preflight` |
