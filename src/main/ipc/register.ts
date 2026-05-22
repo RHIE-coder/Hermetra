@@ -92,6 +92,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(CHANNELS.WEB_SCRIPTS_DELETE, (_e, { path: p }: { path: string }) =>
     scriptsService.get().remove('web', p),
   );
+  ipcMain.handle(CHANNELS.WEB_SCRIPTS_MKDIR, (_e, { path: p }: { path: string }) =>
+    scriptsService.get().mkdir('web', p),
+  );
 
   /* ── Mobile ──────────────────────────────────────────────────────── */
   ipcMain.handle(CHANNELS.MOBILE_TOOLING_STATUS, () => mobile.toolingStatus());
@@ -148,6 +151,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   );
   ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_DELETE, (_e, { path: p }: { path: string }) =>
     scriptsService.get().remove('mobile', p),
+  );
+  ipcMain.handle(CHANNELS.MOBILE_SCRIPTS_MKDIR, (_e, { path: p }: { path: string }) =>
+    scriptsService.get().mkdir('mobile', p),
   );
 
   /* ── Variables ───────────────────────────────────────────────────── */

@@ -30,6 +30,7 @@ export function MobileCodePage() {
     loadScript,
     saveScript,
     deleteScript,
+    mkdirScript,
     setCurrentScript,
     runScript,
   } = useMobileStore();
@@ -63,6 +64,7 @@ export function MobileCodePage() {
       onLoad={loadScript}
       onSave={saveScript}
       onDelete={deleteScript}
+      onMkdir={mkdirScript}
       onSelectNew={setCurrentScript}
       onRun={async (source) => {
         setBusy(true);

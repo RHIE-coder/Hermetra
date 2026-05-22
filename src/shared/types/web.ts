@@ -34,9 +34,10 @@ export interface WebScriptRunResult {
 }
 
 export interface ScriptFile {
-  /** Relative path inside scripts/web or scripts/mobile, e.g. "login.ts". */
+  /** Relative path inside scripts/web or scripts/mobile, e.g. "auth/login.ts" or "auth". */
   path: string;
   name: string;
+  type: 'file' | 'folder';
 }
 
 export interface ScriptFileBody {

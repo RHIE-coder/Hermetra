@@ -38,6 +38,7 @@ interface WebState {
   loadScript: (path: string) => Promise<void>;
   saveScript: (body: ScriptFileBody) => Promise<void>;
   deleteScript: (path: string) => Promise<void>;
+  mkdirScript: (path: string) => Promise<void>;
   setCurrentScript: (body: ScriptFileBody | null) => void;
 }
 
@@ -159,6 +160,11 @@ export const useWebStore = create<WebState>((set, get) => ({
     const scripts = await invoke(CHANNELS.WEB_SCRIPTS_DELETE, { path });
     set({ scripts });
     if (get().currentScript?.path === path) set({ currentScript: null });
+  },
+
+  mkdirScript: async (path) => {
+    const scripts = await invoke(CHANNELS.WEB_SCRIPTS_MKDIR, { path });
+    set({ scripts });
   },
 
   setCurrentScript: (body) => set({ currentScript: body }),

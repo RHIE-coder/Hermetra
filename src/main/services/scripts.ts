@@ -5,6 +5,8 @@ import { workspaceManager } from './workspaceManager';
 
 type Slot = 'web' | 'mobile';
 
+const SCRIPT_EXT = /\.(ts|js|tsx|jsx)$/i;
+
 const SEED_WEB = `// Web automation script.
 //   page: the active Playwright page
 //   env:  process env variables
@@ -43,9 +45,11 @@ function dir(slot: Slot): string {
 }
 
 function safePath(slot: Slot, p: string): string {
+  const root = dir(slot);
   const cleaned = p.replace(/\\/g, '/').replace(/^\/+/, '');
-  const full = path.normalize(path.join(dir(slot), cleaned));
-  if (!full.startsWith(dir(slot))) throw new Error('Invalid path');
+  const full = path.normalize(path.join(root, cleaned));
+  const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
+  if (full !== root && !full.startsWith(rootWithSep)) throw new Error('Invalid path');
   return full;
 }
 
@@ -60,18 +64,33 @@ function seedIfEmpty() {
   }
 }
 
+function walk(root: string, current: string, out: ScriptFile[]) {
+  for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+    const abs = path.join(current, entry.name);
+    const rel = path.relative(root, abs).split(path.sep).join('/');
+    if (entry.isDirectory()) {
+      out.push({ path: rel, name: entry.name, type: 'folder' });
+      walk(root, abs, out);
+    } else if (entry.isFile() && SCRIPT_EXT.test(entry.name)) {
+      out.push({ path: rel, name: entry.name, type: 'file' });
+    }
+  }
+}
+
 export const scriptsService = {
   get() {
     return scriptsService;
   },
   list(slot: Slot): ScriptFile[] {
     seedIfEmpty();
-    const d = dir(slot);
-    return fs
-      .readdirSync(d)
-      .filter((f) => /\.(ts|js|tsx|jsx)$/i.test(f))
-      .sort()
-      .map((f) => ({ path: f, name: f }));
+    const root = dir(slot);
+    const out: ScriptFile[] = [];
+    walk(root, root, out);
+    return out.sort((a, b) => {
+      // Folders first within the same parent, then alphabetical by path.
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+      return a.path.localeCompare(b.path);
+    });
   },
   read(slot: Slot, p: string): ScriptFileBody {
     const file = safePath(slot, p);
@@ -84,9 +103,21 @@ export const scriptsService = {
     fs.writeFileSync(file, body.source, 'utf-8');
     return scriptsService.list(slot);
   },
+  mkdir(slot: Slot, p: string): ScriptFile[] {
+    const folder = safePath(slot, p);
+    fs.mkdirSync(folder, { recursive: true });
+    return scriptsService.list(slot);
+  },
   remove(slot: Slot, p: string): ScriptFile[] {
-    const file = safePath(slot, p);
-    if (fs.existsSync(file)) fs.unlinkSync(file);
+    const target = safePath(slot, p);
+    if (fs.existsSync(target)) {
+      const stat = fs.statSync(target);
+      if (stat.isDirectory()) {
+        fs.rmSync(target, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(target);
+      }
+    }
     return scriptsService.list(slot);
   },
 };
