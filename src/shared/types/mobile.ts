@@ -62,6 +62,17 @@ export interface CapabilityTestResult {
 }
 
 /**
+ * An app installed on a connected device. Returned by
+ * `MobileDriverApi.listInstalledApps(deviceId)`. Not persisted — fetched live
+ * every time the user opens the Apps tab.
+ */
+export interface InstalledApp {
+  name: string;
+  bundleId: string;
+  version: string;
+}
+
+/**
  * A device the user has explicitly saved to their "My Devices" list.
  *
  * Stored in `<userData>/devices.json` (global, not per-workspace). Separate

@@ -3,6 +3,7 @@ import type {
   AppiumServerStatus,
   Capability,
   CapabilityTestResult,
+  InstalledApp,
   MobileDevice,
   MobileSessionStatus,
   SavedDevice,
@@ -33,8 +34,11 @@ interface MobileState {
   scripts: ScriptFile[];
   currentScript: ScriptFileBody | null;
   selectedDeviceKey: string | null;
+  installedApps: InstalledApp[];
+  installedAppsLoading: boolean;
 
   init: () => Promise<void>;
+  refreshInstalledApps: (deviceId: string) => Promise<void>;
   refreshSavedDevices: () => Promise<void>;
   saveDevice: (device: SavedDevice) => Promise<void>;
   removeDevice: (id: string) => Promise<void>;
@@ -80,6 +84,12 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   scripts: [],
   currentScript: null,
   selectedDeviceKey: null,
+  installedApps: [],
+  installedAppsLoading: false,
+
+  refreshInstalledApps: async (_deviceId: string) => {
+    // Stub: implementer wires invoke(CHANNELS.DEVICE_APPS_LIST, { deviceId }).
+  },
 
   refreshSavedDevices: async () => {
     const { devices } = await invoke(CHANNELS.DEVICE_LIST_SAVED);

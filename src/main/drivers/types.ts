@@ -7,6 +7,7 @@ import type {
   AppiumServerStatus,
   Capability,
   CapabilityTestResult,
+  InstalledApp,
   MobileDevice,
   MobileSessionStatus,
   ToolingStatus,
@@ -33,6 +34,7 @@ export interface MobileDriverApi {
   connectExternal(url: string): Promise<AppiumServerStatus>;
   disconnectExternal(): Promise<AppiumServerStatus>;
   listDevices(): Promise<MobileDevice[]>;
+  listInstalledApps(deviceId: string): Promise<InstalledApp[]>;
   testCapability(cap: Capability): Promise<CapabilityTestResult>;
   sessionStatus(): Promise<MobileSessionStatus>;
   startSession(cap: Capability): Promise<MobileSessionStatus>;

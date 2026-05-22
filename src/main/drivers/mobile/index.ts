@@ -2,6 +2,7 @@ import type {
   AppiumServerStatus,
   Capability,
   CapabilityTestResult,
+  InstalledApp,
   MobileDevice,
   MobileSessionStatus,
   ToolingStatus,
@@ -45,6 +46,10 @@ export function createMobileDriver(): MobileDriverApi {
     },
     async listDevices(): Promise<MobileDevice[]> {
       return listConnectedDevices();
+    },
+    async listInstalledApps(_deviceId: string): Promise<InstalledApp[]> {
+      // Stub: implementer fills in real (ideviceinstaller / adb) + mock (13 dummy) paths.
+      return [];
     },
     async testCapability(cap: Capability): Promise<CapabilityTestResult> {
       const url = await requireServer();

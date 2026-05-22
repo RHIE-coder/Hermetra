@@ -21,6 +21,7 @@ import type {
   MobileSessionStatus,
   CapabilityTestResult,
   SavedDevice,
+  InstalledApp,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
 import type {
@@ -85,6 +86,7 @@ export const CHANNELS = {
   DEVICE_SAVE: 'device:saved:save',
   DEVICE_REMOVE: 'device:saved:remove',
   DEVICE_UPDATE_ALIAS: 'device:saved:update-alias',
+  DEVICE_APPS_LIST: 'device:apps:list',
 
   // Mobile — Scripts
   MOBILE_SCRIPTS_LIST: 'mobile:scripts:list',
@@ -182,6 +184,7 @@ export interface IpcContract {
   [CHANNELS.DEVICE_SAVE]: { input: { device: SavedDevice }; output: { ok: true } };
   [CHANNELS.DEVICE_REMOVE]: { input: { id: string }; output: { ok: true } };
   [CHANNELS.DEVICE_UPDATE_ALIAS]: { input: { id: string; alias: string | null }; output: { ok: true } };
+  [CHANNELS.DEVICE_APPS_LIST]: { input: { deviceId: string }; output: { apps: InstalledApp[] } };
 
   [CHANNELS.MOBILE_SCRIPTS_LIST]: { input: void; output: ScriptFile[] };
   [CHANNELS.MOBILE_SCRIPTS_READ]: { input: { path: string }; output: ScriptFileBody };
