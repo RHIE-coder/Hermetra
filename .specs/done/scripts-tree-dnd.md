@@ -142,8 +142,9 @@ States to handle:
 
 ---
 
-**Status:** active
+**Status:** done
 **Created:** 2026-05-22
+**Completed:** 2026-05-22
 **Slug:** scripts-tree-dnd
 **Origin:** intake
 **Depends on:** none
