@@ -74,7 +74,7 @@ interface MobileState {
   refreshConnections: () => Promise<void>;
   saveConnection: (c: Connection) => Promise<void>;
   removeConnection: (id: string) => Promise<void>;
-  useConnection: (id: string | null) => Promise<void>;
+  setConnectionInUse: (id: string | null) => Promise<void>;
   testConnection: (id: string) => Promise<ConnectionTestResult>;
   listAppleCerts: () => Promise<void>;
   startSession: (capabilityId: string) => Promise<void>;
@@ -249,7 +249,7 @@ export const useMobileStore = create<MobileState>((set, get) => ({
     set({ connections, activeConnectionId: activeId });
   },
 
-  useConnection: async (id) => {
+  setConnectionInUse: async (id) => {
     await invoke(CHANNELS.CONN_USE, { id });
     const { connections, activeId } = await invoke(CHANNELS.CONN_LIST);
     set({ connections, activeConnectionId: activeId });

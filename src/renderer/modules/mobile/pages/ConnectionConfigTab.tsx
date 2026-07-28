@@ -43,7 +43,7 @@ export function ConnectionConfigTab() {
     lastTest,
     refreshConnections,
     saveConnection,
-    useConnection,
+    setConnectionInUse,
     testConnection,
     listAppleCerts,
     refreshInstalledApps,
@@ -162,7 +162,7 @@ export function ConnectionConfigTab() {
 
   const handleUse = async () => {
     if (!selectedConn) return;
-    await useConnection(selectedConn.id);
+    await setConnectionInUse(selectedConn.id);
   };
 
   const handleKvAdd = () => {

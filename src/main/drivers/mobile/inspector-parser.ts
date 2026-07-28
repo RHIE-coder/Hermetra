@@ -76,12 +76,8 @@ function nodeToElement(node: MinimalNode, idPrefix: string, indexPath: string): 
   const attributes = readAttrs(node);
   const tag = node.nodeName;
   // Try Android first; fall back to iOS attribute shape.
-  let bounds: InspectorElement['bounds'] = null;
-  if ('bounds' in attributes) {
-    bounds = parseAndroidBounds(attributes.bounds);
-  } else {
-    bounds = parseIosBounds(attributes);
-  }
+  const bounds: InspectorElement['bounds'] =
+    'bounds' in attributes ? parseAndroidBounds(attributes.bounds) : parseIosBounds(attributes);
   const id = `${idPrefix}:${indexPath}`;
   const children = elementChildren(node).map((child, i) =>
     nodeToElement(child, idPrefix, `${indexPath}:${i}`),

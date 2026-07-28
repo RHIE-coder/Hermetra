@@ -17,7 +17,7 @@ import type {
  * Spec acceptance criteria covered here (devices-connection-config):
  *   AC2 (UI): clicking "+ 새 연결 구성" then "생성" → saveConnection() with a
  *             new Connection whose deviceId is the picked device's.
- *   AC3 (UI): clicking "사용하기" → useConnection(id); the in-use section
+ *   AC3 (UI): clicking "사용하기" → setConnectionInUse(id); the in-use section
  *             reflects the active id.
  *   AC4 (UI): removing the active connection clears the in-use section.
  *   AC5 (UI): the xcodeSigningId dropdown is populated from listAppleCerts().
@@ -41,7 +41,7 @@ interface StoreSeed {
   refreshConnections?: () => Promise<void>;
   saveConnection?: (c: Connection) => Promise<void>;
   removeConnection?: (id: string) => Promise<void>;
-  useConnection?: (id: string | null) => Promise<void>;
+  setConnectionInUse?: (id: string | null) => Promise<void>;
   testConnection?: (id: string) => Promise<ConnectionTestResult>;
   listAppleCerts?: () => Promise<void>;
   refreshInstalledApps?: (deviceId: string) => Promise<void>;
@@ -51,7 +51,7 @@ function seedStore(seed: StoreSeed = {}) {
   const refreshConnections = seed.refreshConnections ?? vi.fn().mockResolvedValue(undefined);
   const saveConnection = seed.saveConnection ?? vi.fn().mockResolvedValue(undefined);
   const removeConnection = seed.removeConnection ?? vi.fn().mockResolvedValue(undefined);
-  const useConnection = seed.useConnection ?? vi.fn().mockResolvedValue(undefined);
+  const setConnectionInUse = seed.setConnectionInUse ?? vi.fn().mockResolvedValue(undefined);
   const testConnection =
     seed.testConnection ??
     vi.fn().mockResolvedValue({ ok: true, durationMs: 42, message: 'ok' });
@@ -102,7 +102,7 @@ function seedStore(seed: StoreSeed = {}) {
     refreshConnections,
     saveConnection,
     removeConnection,
-    useConnection,
+    setConnectionInUse,
     testConnection,
     listAppleCerts,
     refreshInstalledApps,
@@ -112,7 +112,7 @@ function seedStore(seed: StoreSeed = {}) {
     refreshConnections,
     saveConnection,
     removeConnection,
-    useConnection,
+    setConnectionInUse,
     testConnection,
     listAppleCerts,
     refreshInstalledApps,
@@ -442,20 +442,20 @@ describe('ConnectionConfigTab — left tree + edit panel (P4)', () => {
     expect(banner.textContent ?? '').toContain('reachable');
   });
 
-  // AC3 (UI) — clicking "사용하기" → useConnection(id).
-  it('AC3: clicking conn-edit-use-btn calls useConnection(id)', async () => {
+  // AC3 (UI) — clicking "사용하기" → setConnectionInUse(id).
+  it('AC3: clicking conn-edit-use-btn calls setConnectionInUse(id)', async () => {
     const user = userEvent.setup();
-    const useConnection = vi.fn().mockResolvedValue(undefined);
+    const setConnectionInUse = vi.fn().mockResolvedValue(undefined);
     seedStore({
       savedDevices: [baseSaved()],
       connections: [baseConn({ id: 'conn-1' })],
-      useConnection,
+      setConnectionInUse,
     });
     renderTab();
 
     await user.click(screen.getByTestId('conn-config-row-conn-1'));
     await user.click(screen.getByTestId('conn-edit-use-btn'));
 
-    expect(useConnection).toHaveBeenCalledWith('conn-1');
+    expect(setConnectionInUse).toHaveBeenCalledWith('conn-1');
   });
 });

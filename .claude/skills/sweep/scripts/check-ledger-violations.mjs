@@ -101,7 +101,6 @@ async function main() {
       process.exit(0);
     }
     for (const r of rules) {
-      let m;
       const lines = content.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         if (r.re.test(lines[i])) {

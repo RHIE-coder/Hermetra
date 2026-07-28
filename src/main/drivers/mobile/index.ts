@@ -95,7 +95,7 @@ async function realListInstalledApps(deviceId: string): Promise<InstalledApp[]> 
     } catch (err) {
       const e = err as { stderr?: string; message?: string };
       const tail = (e.stderr || e.message || '').trim().slice(-256);
-      throw new Error(`ideviceinstaller failed: ${tail}`);
+      throw new Error(`ideviceinstaller failed: ${tail}`, { cause: err });
     }
   }
 
@@ -110,7 +110,7 @@ async function realListInstalledApps(deviceId: string): Promise<InstalledApp[]> 
     } catch (err) {
       const e = err as { stderr?: string; message?: string };
       const tail = (e.stderr || e.message || '').trim().slice(-256);
-      throw new Error(`adb shell pm list packages failed: ${tail}`);
+      throw new Error(`adb shell pm list packages failed: ${tail}`, { cause: err });
     }
   }
 

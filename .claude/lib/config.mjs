@@ -26,7 +26,7 @@ export function loadConfig() {
   try {
     raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
   } catch (e) {
-    throw new Error(`harness.config.json is not valid JSON: ${e.message}`);
+    throw new Error(`harness.config.json is not valid JSON: ${e.message}`, { cause: e });
   }
   cached = raw;
   return raw;

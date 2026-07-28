@@ -124,7 +124,7 @@ function seedStore(seed: StoreSeed = {}) {
     refreshConnections: vi.fn().mockResolvedValue(undefined),
     saveConnection: vi.fn().mockResolvedValue(undefined),
     removeConnection: vi.fn().mockResolvedValue(undefined),
-    useConnection: vi.fn().mockResolvedValue(undefined),
+    setConnectionInUse: vi.fn().mockResolvedValue(undefined),
     testConnection: vi.fn().mockResolvedValue({ ok: true, durationMs: 0, message: 'ok' }),
     listAppleCerts: vi.fn().mockResolvedValue(undefined),
     startSession: vi.fn().mockResolvedValue(undefined),

@@ -14,7 +14,12 @@ export function ScenariosPage() {
     useBridgeStore();
   const [selectedId, setSelectedId] = useState<string | null>(scenarios[0]?.id ?? null);
   const selected = scenarios.find((s) => s.id === (selectedId ?? scenarios[0]?.id));
-  const updates = currentRunId ? scenarioRuns[currentRunId] ?? [] : [];
+  // Memoized because the `?? []` fallback would hand out a fresh array every
+  // render, which defeats the stepStatus memo below.
+  const updates = useMemo(
+    () => (currentRunId ? scenarioRuns[currentRunId] ?? [] : []),
+    [currentRunId, scenarioRuns],
+  );
   const t = useT();
 
   const stepStatus = useMemo(() => {
