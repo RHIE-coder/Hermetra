@@ -39,28 +39,40 @@ UI 라벨은 ID가 아니다 — 라벨은 `src/renderer/lib/messages.ts` 의 en
 디자인 문서에만 적힌 상호작용 요구도 인수조건으로 올린다(안 올리면 아무 단계도 검증하지 않는다).
 인수조건은 `docs/qa/` 의 TestCase 와 짝지어야 한다.
 
-## 지금의 정본 상태 (솔직하게)
+## 트리
 
-steward 는 이 프로젝트 중간에 도입됐다. 아래 Surface 목록은 코드(`src/renderer/App.tsx` 라우트,
-`tests/e2e/smoke.spec.ts` 의 `NAV_ITEMS`)에서 뽑은 **실재 화면 목록**이고, 기획 정본은 아직
-안 쓰였다. 표의 "정본" 칸이 없음이면 그 화면에는 아직 정본 노드가 없다는 뜻이다 —
-gate 단계에서 "명세 영향 없음" 으로 눙치지 말고 노드 신설을 제안해야 하는 자리다.
+| 문서 | 담는 것 |
+|---|---|
+| `architecture.md` | 프로세스 3개 · 데이터 흐름 · 저장소 · 기술 선택의 "왜" |
+| `application.md` | 앱 셸(사이드바·상단바)과 전역 규칙(i18n · 토큰 · 워크스페이스 격리 · 드라이버 모드 · IPC) |
 
 | Service | Surface ID | 라우트 | nav testid | 정본 |
 |---|---|---|---|---|
-| web | `web.remote` | `/web/remote` | `nav-web-remote` | 없음 |
-| web | `web.code` | `/web/code` | `nav-web-code` | 없음 |
-| mobile | `mobile.devices` | `/mobile/devices` | `nav-mobile-devices` | 없음 |
-| mobile | `mobile.code` | `/mobile/code` | `nav-mobile-code` | 없음 |
-| mobile | `mobile.inspector` | `/mobile/inspector` | `nav-mobile-inspector` | 없음 |
-| bridge | `bridge.scenarios` | `/bridge/scenarios` | `nav-bridge-scenarios` | 없음 |
-| bridge | `bridge.variables` | `/bridge/variables` | `nav-bridge-variables` | 없음 |
-| bridge | `bridge.bus` | `/bridge/bus` | `nav-bridge-bus` | 없음 |
-| bridge | `bridge.events` | `/bridge/events` | `nav-bridge-events` | 없음 |
-| workspace | `workspace.switcher` | 상단바 | — | 없음 |
+| web | `web.remote` | `/web/remote` | `nav-web-remote` | `web/remote.md` |
+| web | `web.code` | `/web/code` | `nav-web-code` | `web/code.md` |
+| mobile | `mobile.devices` | `/mobile/devices` | `nav-mobile-devices` | `mobile/devices.md` |
+| mobile | `mobile.code` | `/mobile/code` | `nav-mobile-code` | `mobile/code.md` |
+| mobile | `mobile.inspector` | `/mobile/inspector` | `nav-mobile-inspector` | `mobile/inspector.md` |
+| bridge | `bridge.scenarios` | `/bridge/scenarios` | `nav-bridge-scenarios` | `bridge/scenarios.md` |
+| bridge | `bridge.variables` | `/bridge/variables` | `nav-bridge-variables` | `bridge/variables.md` |
+| bridge | `bridge.bus` | `/bridge/bus` | `nav-bridge-bus` | `bridge/bus.md` |
+| bridge | `bridge.events` | `/bridge/events` | `nav-bridge-events` | `bridge/events.md` |
+| workspace | `workspace.switcher` | 상단바 | — | `workspace/switcher.md` |
+
+Service 규칙(그 서비스 전체에 걸리는 정책·상태 소유)은 각 폴더의 `README.md` 에 있다.
 
 > `bridge` 는 UI에서 "설정 / Settings" 로 표시된다. 내부 식별자(라우트·IPC 채널·모듈 폴더)는
 > 의도적으로 `bridge` 를 유지한다 — `CLAUDE.md` 의 명명 규칙 참고.
 
-빈 칸을 한꺼번에 채우려면 `/steward:handover` 를 쓴다(지금 코드를 기준으로 정본을 채우는 단계).
-개별 작업에서 걸리는 노드는 그 작업의 `spec` 단계가 채운다.
+## 상태 (2026-07-28 handover 기준)
+
+steward 는 이 프로젝트 중간에 도입됐고, 위 정본은 그 시점의 **코드를 역설계해** 채운
+것이다. 화면 10개 · 전역 규칙 5개 · Service 정책 4개에 빈 칸은 없다.
+단, 정본이 "지금 이렇게 동작한다"를 적은 것이지 "이렇게 동작해야 한다"를 새로 정한 것은
+아니다 — 각 문서 끝의 "알려진 한계" 가 그 경계다.
+
+미구현으로 명시된 것 하나가 결정을 기다린다: `mobile/README.md` 의
+`connection-to-session-gap`.
+
+이후 개별 작업에서 걸리는 노드는 그 작업의 `spec` 단계가 갱신한다. 과거 작업 단위 스펙은
+`.specs/done/` 에 그대로 있다(역사 기록이며 정본이 아니다).
