@@ -137,6 +137,94 @@ describe('ScenarioOrchestrator (biz logic)', () => {
     expect(onEvent.mock.calls[0]?.[0]).toMatchObject({ channel: 'login.done', side: 'bridge' });
   });
 
+  it('runs web and mobile together for a "both" step', async () => {
+    const web = fakeWeb();
+    const mobile = fakeMobile();
+    const events = new BridgeEventBus();
+    const orch = new ScenarioOrchestrator({ web, mobile, events });
+    const log = collectUpdates(orch);
+
+    orch.start({
+      id: 's',
+      name: 'x',
+      steps: [{ id: 'a', platform: 'both', name: '', scriptPath: 'a.ts' }],
+    });
+
+    await waitForUpdate(log, (u) => u.stepId === 'a' && u.status === 'completed');
+
+    expect(web.runScript).toHaveBeenCalledOnce();
+    expect(mobile.runScript).toHaveBeenCalledOnce();
+  });
+
+  it('marks steps that come after an abort as skipped', async () => {
+    // 진행 중인 단계를 우리가 붙잡고 있다가 abort 시킨다 — 그래야 다음 단계가
+    // signal.aborted 를 만나는 순간이 경합 없이 재현된다.
+    let releaseStepA: () => void = () => {};
+    const inFlight = new Promise<void>((resolve) => {
+      releaseStepA = resolve;
+    });
+    const web = fakeWeb({ runScript: vi.fn().mockReturnValue(inFlight) });
+    const mobile = fakeMobile();
+    const events = new BridgeEventBus();
+    const orch = new ScenarioOrchestrator({ web, mobile, events });
+    const log = collectUpdates(orch);
+
+    const runId = orch.start({
+      id: 's',
+      name: 'x',
+      steps: [
+        { id: 'a', platform: 'web', name: '', scriptPath: 'a.ts' },
+        { id: 'b', platform: 'mobile', name: '', scriptPath: 'b.ts' },
+      ],
+    });
+
+    await waitForUpdate(log, (u) => u.stepId === 'a' && u.status === 'running');
+    expect(orch.stop(runId)).toBe(true);
+    releaseStepA();
+
+    await waitForUpdate(log, (u) => u.stepId === 'b' && u.status === 'skipped');
+    expect(log.find((u) => u.stepId === 'b')?.message).toBe('aborted');
+    expect(mobile.runScript).not.toHaveBeenCalled();
+  });
+
+  it('completes a step with an unknown platform without touching either driver', async () => {
+    // store.json 이 손으로 편집돼 platform 이 세 값 중 아무것도 아닐 수 있다.
+    // 지금 동작은 "아무 드라이버도 부르지 않고 완료 처리" — 던지지 않는다. 그걸 못박는다.
+    const web = fakeWeb();
+    const mobile = fakeMobile();
+    const events = new BridgeEventBus();
+    const orch = new ScenarioOrchestrator({ web, mobile, events });
+    const log = collectUpdates(orch);
+
+    orch.start({
+      id: 's',
+      name: 'x',
+      steps: [
+        { id: 'a', platform: 'desktop' as Scenario['steps'][number]['platform'], name: '', scriptPath: 'a.ts' },
+      ],
+    });
+
+    await waitForUpdate(log, (u) => u.stepId === 'a' && u.status === 'completed');
+    expect(web.runScript).not.toHaveBeenCalled();
+    expect(mobile.runScript).not.toHaveBeenCalled();
+  });
+
+  it('stringifies a non-Error rejection into the failure message', async () => {
+    const web = fakeWeb({ runScript: vi.fn().mockRejectedValue('driver exploded') });
+    const events = new BridgeEventBus();
+    const orch = new ScenarioOrchestrator({ web, mobile: fakeMobile(), events });
+    const log = collectUpdates(orch);
+
+    orch.start({
+      id: 's',
+      name: 'x',
+      steps: [{ id: 'a', platform: 'web', name: '', scriptPath: 'a.ts' }],
+    });
+
+    await waitForUpdate(log, (u) => u.status === 'failed');
+    expect(log.find((u) => u.status === 'failed')?.message).toBe('driver exploded');
+  });
+
   it('stop() aborts in-flight scenarios', async () => {
     const events = new BridgeEventBus();
     const orch = new ScenarioOrchestrator({ web: fakeWeb(), mobile: fakeMobile(), events });

@@ -70,13 +70,40 @@ switch (runner) {
     process.exit(2);
 }
 
+/**
+ * Single pass, because chained .replace() calls corrupt each other: turning `**`
+ * into `.*` first means the later `*` → `[^/]*` pass rewrites that `.*` into
+ * `.[^/]*`, which silently demands an extra path segment. That bug made
+ * `src/main/bridge/**\/*.ts` never match `src/main/bridge/orchestrator.ts`, so
+ * every threshold rule reported OK.
+ */
+function globToRegExp(glob) {
+  let out = '^';
+  for (let i = 0; i < glob.length; i++) {
+    const ch = glob[i];
+    if (ch === '*') {
+      if (glob[i + 1] === '*') {
+        if (glob[i + 2] === '/') {
+          out += '(?:[^/]+/)*'; // `**/` — zero or more directories
+          i += 2;
+        } else {
+          out += '.*';
+          i += 1;
+        }
+      } else {
+        out += '[^/]*'; // `*` — within one segment
+      }
+    } else if ('.+^${}()|[]\\?'.includes(ch)) {
+      out += `\\${ch}`;
+    } else {
+      out += ch;
+    }
+  }
+  return new RegExp(`${out}$`);
+}
+
 function matchGlob(p, glob) {
-  const re = '^' + glob
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*/g, '.*')
-    .replace(/\*/g, '[^/]*')
-    + '$';
-  return new RegExp(re).test(p.replace(/\\/g, '/'));
+  return globToRegExp(glob).test(p.replace(/\\/g, '/'));
 }
 
 const findings = [];
