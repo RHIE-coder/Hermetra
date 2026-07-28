@@ -102,13 +102,30 @@ Hermetra develops test-first. Every new behavior — frontend or backend — sta
 | **UI component**      | `src/renderer/**/*.test.tsx`         | Vitest + RTL + happy-dom | One component at a time. Mock the IPC layer.                         |
 | **E2E**               | `tests/e2e/*.spec.ts`                | Playwright (Electron)    | Real Electron, real renderer. Smoke + a couple golden paths.         |
 
-### 3.2 The TDD loop (mandatory for any new behavior)
+### 3.2 The TDD loop — `tdd_mode: routed`
+
+Tests are never optional. The *order* depends on the layer
+(`.harness/steward/config.yaml` → `values.tdd_mode: "routed"`):
+
+| Layer | Order |
+|---|---|
+| Biz logic (`src/main/bridge/**`, pure `services/**`) | **test first** — no exceptions |
+| API / IPC contract (`channels.ts` + handler) | **test first** — the contract is the test |
+| Schema (`store.json`, `variables/*.json`, workspace files) | **test first** |
+| UI component | test may follow the implementation, but lands in the same change |
+| E2E | test may follow the implementation, but lands in the same change |
+
+Test-first layers run the full loop:
 
 1. **Red.** Write the smallest failing test that captures the next increment.
 2. **Confirm red.** `npm run test -- --run <file>`; the test must fail for the *expected* reason. (No "fails because the symbol doesn't exist yet" if the test was supposed to assert behavior; bring the type into existence first if needed.)
 3. **Green.** Write the minimum code that makes the test pass. Resist scope creep.
 4. **Refactor.** Improve names / dedupe / extract. Tests stay green.
 5. **Commit.** One logical step, one commit, ideally pointing to one test file.
+
+For UI/E2E, implement → verify by actually driving the app (`ui-preview` binding
+— clicking, not just looking) → then write the test that pins the behavior.
+Pick layers by what the change touches; don't demand all five.
 
 ### 3.3 What "high coverage" means here
 
@@ -137,13 +154,15 @@ Coverage gates fail CI; don't push under threshold.
 
 For any new behavior, the PR must include:
 
-1. ✅ Failing test added first commit (visible in history)
+1. ✅ Test-first layers (logic / IPC / schema) show the failing test in the first commit
 2. ✅ Implementation commit makes it green
 3. ✅ At least one test per affected layer (skip layers that don't apply, justify in PR body)
-4. ✅ `npm run check` (typecheck + lint + unit + component + api + schema) green
+4. ✅ `npm run check` (typecheck + lint + test + build) green
 5. ✅ `npm run test:e2e` smoke green
 6. ✅ Coverage thresholds not regressed
 7. ✅ i18n: every new user-visible string in both `en` and `ko`
+8. ✅ Canonical docs updated (`docs/spec/`, `docs/qa/`) or "no spec impact" stated explicitly
+9. ✅ Gate run recorded in `docs/qa/runs/`, in the same commit as the change
 
 ---
 
@@ -153,7 +172,7 @@ For any new behavior, the PR must include:
 npm run dev              # electron-vite dev
 npm run build            # electron-vite build
 npm run typecheck        # tsc --noEmit (node + web)
-npm run lint             # eslint .
+npm run lint             # eslint . (flat config in eslint.config.js)
 npm run test             # vitest run (unit + component + api + schema)
 npm run test:watch       # vitest watch
 npm run test:coverage    # vitest run --coverage
@@ -161,7 +180,14 @@ npm run test:e2e         # playwright test (Electron, mock drivers)
 npm run check            # typecheck && lint && test && build
 ```
 
-`npm run check` is the gate every PR must pass.
+Lint layout mirrors the process boundaries: `src/main` + `src/preload` get Node
+globals, `src/renderer` gets browser globals plus `react-hooks` rules, `**/*.cjs`
+is parsed as CommonJS. A parameter named `_x` is allowed to be unused (interface
+signatures); an unused *variable* is still an error — delete it.
+
+`npm run check` is the gate every PR must pass. steward's `gate` phase runs the
+same three commands plus `npm run test:e2e`, then records the run in
+`docs/qa/runs/`.
 
 ---
 
@@ -189,41 +215,75 @@ If we ever move to SQLite or similar, the **DB Schema** test layer above is wher
 
 ---
 
-## 7. Workflow (five+1 steps, in order)
+## 7. Workflow — steward is the canonical harness
 
-Every non-trivial change goes through this loop. Trivial = rename, typo, comment
-— just edit directly.
+This project is driven by the **steward** harness (installed as the
+`steward@steward` plugin). Its config lives in `.harness/steward/config.yaml`;
+the active harness is pinned by the untracked `.harness-main` file.
 
-0. **`/setup`** — Run on a fresh checkout. Verifies via
-   `node .claude/scripts/preflight.mjs`; auto-fills missing dirs/seeds;
-   interviews user for `harness.config.json` if absent. Idempotent.
-1. **`/intake "<request>"`** — Requirements analysis. Loops `AskUserQuestion`
-   until the user explicitly approves. Emits a spec under `.specs/active/<slug>.md`
-   and registers Tasks. **No implementation.** See `.claude/skills/intake/`.
-   For *clearly simple* single-layer changes, use `/quick` instead (1b below).
-1b. **`/quick "<one-liner>"`** — Fast-path for clearly simple, single-layer
-   changes (small bug fix, regex tighten, one-file tweak). Generates a minimal
-   spec, asks **one** confirmation, then auto-invokes `/sprint`. Refuses and
-   routes to `/intake` if the change is multi-layer, adds user-visible strings,
-   adds an IPC channel, a page/route, or a schema field. See
-   `.claude/skills/quick/`.
-2. **`/sprint <slug>`** — Auto TDD loop. Orchestrates three subagents in order:
-   - `testwriter` → smallest failing tests (Red)
-   - `implementer` → minimum code to green (Green)
-   - `auditor` → runs `npm run check` + every sweep script + ledger check
-   Loops until auditor PASS. Moves spec to `.specs/done/`. See
-   `.claude/skills/sprint/`.
-3. **`/immunize`** — Whenever the user corrects a behavior or a sweep finds a
-   repeating pattern, record it in `.claude/immunity/ledger.md`. Entries with
-   a `rule:` regex are auto-enforced by the PreToolUse hook
-   `.claude/hooks/immunity-rules-guard.mjs`. See `.claude/skills/immunize/`.
-4. **`/sweep`** — Project-wide audit. Manual trigger. Runs every check in
-   `.claude/skills/sweep/scripts/run-all.mjs`. Reports drift; offers Tasks
-   for findings. Does not auto-fix. See `.claude/skills/sweep/`.
+You do **not** pick a command. steward classifies every request first and shows
+the verdict tag on the first line of the reply:
+
+| Tag | When | Phases it runs |
+|---|---|---|
+| `[consult]` | question / analysis, not a task | none — read-only answer |
+| `[direct]` | trivial one-liner | fix → verify → one-line report |
+| `[hotfix]` | urgent one-or-two-line fix | build (short) → gate |
+| `[small]` | small, clear scope | intake (short) → build → review (1 lens) → gate → report |
+| `[feature]` | new behavior | intake → spec → build → review (5 lenses) → gate → report |
+| `[greenfield]` | new screen / new service | same as feature, spec depth maximal |
+
+Phase skills: `/steward:intake`, `/steward:spec`, `/steward:build`,
+`/steward:review`, `/steward:gate`, `/steward:report`, `/steward:immunize`.
+Invoking one manually overrides the automatic verdict. `/steward:guide` explains
+the harness itself; `/steward:handover` backfills the canonical docs.
+
+### What lives where
+
+| Thing | Path |
+|---|---|
+| Living plan spec (Application>Service>Surface>Section>Component) | `docs/spec/` |
+| Living test definitions (TestPlan>Scenario>Suite>Case) | `docs/qa/` |
+| Gate run records (append-only) | `docs/qa/runs/` |
+| Agreed vocabulary | `docs/glossary.md` |
+| Per-task batons (intake / build-report / findings / gate-report) | `.harness/steward/artifacts/<branch>/` |
+| Screenshots captured by `ui-shot` | `.harness/steward/artifacts/<branch>/shots/` (untracked) |
+| Past sprint specs of the previous harness | `.specs/done/` (frozen, historical) |
+
+`docs/spec/` and `docs/qa/` are **canonical and present-tense** — they describe
+what the product must be now, not what a task did. steward's `gate` phase
+compares the diff against them and blocks on unexplained drift.
+
+### Project values and bindings (`.harness/steward/config.yaml`)
+
+| Slot | Value here |
+|---|---|
+| `tdd_mode` | `routed` — see §3.2 |
+| `typecheck_command` | `npm run typecheck && npm run lint` |
+| `test_command` | `npm run test` |
+| `build_command` | `npm run build` |
+| `e2e-runner` | `npm run test:e2e` |
+| `token-guard` | `npm run sweep` (tokens + layered imports + i18n + coverage + ledger) |
+| `ui-preview` | `.harness/steward/project/impl/ui-preview.md` (launch Electron, click through) |
+| `ui-shot` | `node .harness/steward/project/impl/ui-shot.mjs --nav=<testid>` |
+| `contrast-check`, `surface-verify` | **unbound** — no Electron surface adapter yet. Say "미바인딩" in the report; never silently pass. |
+
+Verify the wiring any time with `node .harness/steward/core/validate.mjs`.
+
+### The previous `.claude` harness (legacy, still useful)
+
+`/intake`, `/quick`, `/sprint`, `/sweep`, `/immunize` and the `testwriter` /
+`implementer` / `auditor` / `sweeper` agents predate steward. They are **not**
+the default path anymore — don't start work with them. What stays live:
+
+- **PreToolUse hooks** — `design-token-guard`, `immunity-rules-guard` (see below).
+- **Sweep scripts** — reached through steward's `token-guard` binding.
+- **Immunity ledger** — `/steward:immunize` writes to the same
+  `.claude/immunity/ledger.md`, so the hooks keep enforcing it.
 
 ### Active immunity rules
 
-Every agent in the `/sprint` loop reads `.claude/immunity/ledger.md` first.
+Every phase reads `.claude/immunity/ledger.md` before writing code.
 Two PreToolUse hooks back this up at the tool-call level:
 
 - **`design-token-guard`** — Blocks Writes/Edits to `.tsx` that reference a
@@ -240,8 +300,10 @@ if the rule is genuinely wrong.
 
 | You want to | Command |
 |---|---|
-| Run the whole sweep | `npm run sweep` |
+| Run the whole sweep | `npm run sweep` (exits 1 if any check fails; read the summary table) |
 | Run one check (e.g. tokens) | `npm run sweep:tokens` |
 | Run full project gate | `npm run check` |
 | Lint the ledger | `npm run lint:ledger` |
 | Preflight readiness | `npm run preflight` |
+| Check the steward wiring | `node .harness/steward/core/validate.mjs` |
+| Screenshot a screen | `node .harness/steward/project/impl/ui-shot.mjs --nav=nav-bridge-bus` |

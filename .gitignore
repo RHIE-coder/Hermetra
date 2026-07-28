@@ -146,3 +146,8 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+.harness-main
+
+# steward — 화면 캡처는 로컬 증거물이다 (리뷰·게이트가 커밋 전에 읽는다). 저장소에 넣지 않는다.
+.harness/steward/shots/
+.harness/steward/artifacts/*/shots/

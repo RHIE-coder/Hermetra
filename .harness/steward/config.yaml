@@ -1,0 +1,37 @@
+# steward — 이 프로젝트에 붙인 하네스 설정 (setup 이 깔아 줌)
+core: steward
+managed_by: steward
+schema_version: 1
+phases:
+  - intake
+  - spec
+  - build
+  - review
+  - gate
+  - report
+  - immunize
+values:
+  glossary_path: "docs/glossary.md"
+  spec_dir: "docs/spec"
+  qa_dir: "docs/qa"
+  # routed — 순수 로직(main/bridge)·IPC 계약·스키마는 테스트 먼저, UI·e2e 는 구현 후 테스트 허용.
+  tdd_mode: "routed"
+  # 정적 검사 = 타입 + lint. 둘 다 초록이어야 build·gate 를 통과한다.
+  typecheck_command: "npm run typecheck && npm run lint"
+  test_command: "npm run test"
+  build_command: "npm run build"
+bindings:
+  ui-preview: "./.harness/steward/project/impl/ui-preview.md"
+  ui-shot: "node .harness/steward/project/impl/ui-shot.mjs"
+  # token-guard 는 디자인 토큰만이 아니라 이 프로젝트의 전체 드리프트 검사를 부른다
+  # (토큰 · 계층 임포트 · i18n en/ko 짝 · 커버리지 · immunity ledger).
+  # 2026-07-28 기준선: 5개 검사 전부 PASS. FAIL 이 보이면 이번 변경이 낸 것이다.
+  token-guard: "npm run sweep"
+  # 미바인딩 — Electron 렌더러에서 실효 배경색까지 뽑는 대비 어댑터가 아직 없다.
+  # surface-verify 어댑터를 만들 때 그 조각으로 함께 붙인다.
+  contrast-check: ""
+  e2e-runner: "npm run test:e2e"
+  # 미바인딩 — contracts/surface-verify.md 의 Electron(browser 프로파일) 어댑터가 아직 없다.
+  # review·gate 는 이 능력을 쓰는 일만 건너뛰고 "미바인딩: surface-verify" 를 산출물에 명시한다.
+  surface-verify: ""
+impl: {}
