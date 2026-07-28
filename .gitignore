@@ -148,6 +148,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .harness-main
 
-# steward — 화면 캡처는 로컬 증거물이다 (리뷰·게이트가 커밋 전에 읽는다). 저장소에 넣지 않는다.
+# steward — 화면 캡처와 정규화 모델 기록은 로컬 증거물이다 (리뷰·게이트가 커밋 전에 읽고,
+# 훅이 판정기를 다시 돌린다). 다시 만들 수 있고 무거우므로 저장소에 넣지 않는다.
+# 기준선(project/surface-baseline.json)은 반대로 반드시 추적한다 — 그게 판정의 기준이다.
 .harness/steward/shots/
 .harness/steward/artifacts/*/shots/
+.harness/steward/artifacts/*/surface-verify.json

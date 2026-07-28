@@ -25,6 +25,27 @@
   - 정의만 있고 구현이 없는 케이스 38개 — 미실행. 목록은 `../coverage-gaps.md`.
 - 실패 상세: 없음.
 
+## 회차 2 — surface-verify 어댑터 도입 후
+
+- 기준 커밋: `eaf7540` (docs(spec,qa): backfill the canonical trees)
+- 범위: 전체 + 화면 시각 판정 신규
+- 목적: UI 관문(`surface-verify`)을 켠 시점의 증빙
+
+| 검사 | 명령 | 결과 |
+|---|---|---|
+| 타입·lint·테스트·빌드 | `npm run check` | PASS (25파일 / 248개 — 판정기 단위 25개 추가) |
+| E2E | `npm run test:e2e` | PASS (11개) |
+| 드리프트 검사 | `npm run sweep` | PASS (5/5) |
+| 화면 시각 판정 | `node .harness/steward/project/impl/surface-verify.mjs` | 캡처 54건(화면 9 × 폼팩터 3 × 테마 2) · 차단 0 · 관찰 237 |
+| UI 관문 훅 | steward `surface-gate` | 동작 확인 — 기록이 낡으면 차단, 최신이면 통과 |
+
+- 미실행·미바인딩: 없음. 이번 회차부터 `surface-verify` · `contrast-check` 가 바인딩되어
+  화면 시각 판정이 기계로 돈다.
+- 관찰 237건: 기존 시각 위반(대비 37종 · 잘림 1 · 표적 2)을 기준선에 기록해 차단에서
+  제외했다. 목록 `.harness/steward/project/surface-baseline.json`, 배경은
+  `../coverage-gaps.md` 의 `gap-visual-baseline`.
+- 실패 상세: 없음.
+
 ## 회차 1 참고 — 이 회차 직전에 고친 것
 
 같은 브랜치의 앞선 두 커밋이 검사 도구 자체의 결함을 고쳤다. 그 전 결과와 비교할 때

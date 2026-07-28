@@ -56,3 +56,22 @@
 | CASE-app-024 | 브리지 커버리지 임계(95%)를 지킨다 | `bridge` | 도구 | `npm run sweep:coverage` |
 | CASE-app-025 | immunity 원장의 금지 패턴이 코드에 없다 | — | 도구 | `npm run sweep:ledger` |
 | CASE-app-026 | 타입 검사와 lint 가 통과한다 | `app.ipc` | 도구 | `npm run typecheck && npm run lint` |
+
+## TestSuite: `app.surface` — 화면 시각 판정 (도구가 판정)
+
+어댑터가 화면 9개 × 폼팩터 3개 × 테마 2개를 렌더해 정규화 모델을 뽑고, 판정기가 그 모델만
+보고 판정한다. 실행: `node .harness/steward/project/impl/surface-verify.mjs`.
+판정기의 규칙 자체는 단위 테스트가 지킨다: `tests/unit/surface-checks.test.ts` (25개).
+
+| Case | 무엇 | 덮는 노드 | 계층 | 구현 |
+|---|---|---|---|---|
+| CASE-app-040 | 본문 텍스트 대비가 4.5:1, 큰 텍스트가 3:1 이상이다 (기준선 대비 새 위반 0) | `app.theme` | 도구 | 어댑터 + 판정기 |
+| CASE-app-041 | 상호작용 요소가 서로를 가리지 않는다 (중첩은 겹침이 아니다) | `app.shell` | 도구 | 어댑터 + 판정기 |
+| CASE-app-042 | 핵심 내용이 잘려 사라지지 않는다 | `app.shell` | 도구 | 어댑터 + 판정기 |
+| CASE-app-043 | 내용이 가로로 판을 넘치지 않는다 (세로 스크롤은 결함이 아니다) | `app.shell` | 도구 | 어댑터 + 판정기 |
+| CASE-app-044 | 화면을 그리는 동안 렌더러 콘솔 에러가 없다 | `app.shell` | 도구 | 어댑터 + 판정기 |
+| CASE-app-045 | 포인터 표적이 최소 크기(24점) 이상이다 | `app.shell` | 도구 | 어댑터 + 판정기 |
+| CASE-app-046 | 대비 계산이 WCAG 2.2 상대휘도 공식과 일치한다 | — | 단위 | `tests/unit/surface-checks.test.ts` |
+| CASE-app-047 | 기준선에 있는 findings 는 차단이 아니라 관찰로 내려간다 | — | 단위 | `tests/unit/surface-checks.test.ts` |
+| CASE-app-048 | 렌더 실패·빈 기록은 통과가 아니라 cannot-verify 다 | — | 단위 | `tests/unit/surface-checks.test.ts` |
+| CASE-app-049 | UI 파일을 건드린 커밋은 최신 검증 기록을 요구한다 | — | 도구 | steward `surface-gate` 훅 |

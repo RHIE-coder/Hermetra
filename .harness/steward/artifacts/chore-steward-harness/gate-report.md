@@ -55,3 +55,36 @@ handover 단계가 전체 회귀를 돌렸고, 그 결과를 이 관문 리포�
 ## 판정
 
 통과. 실패·건너뜀·미바인딩을 위에 전부 적었다.
+
+---
+
+# 추가 검사 — surface-verify 어댑터 도입 (기준 커밋 `eaf7540`)
+
+같은 작업의 이어지는 증분. 위에서 "미바인딩" 으로 적었던 두 능력이 이제 바인딩됐다.
+
+| 검사 | 명령 | 결과 |
+|---|---|---|
+| 타입·lint·테스트·빌드 | `npm run check` | PASS (25파일 / 248개) |
+| E2E | `npm run test:e2e` | PASS (11개) |
+| 드리프트 검사 | `npm run sweep` | PASS (5/5) |
+| 화면 시각 판정 | `surface-verify` (= `contrast-check`) | 캡처 54건 · 차단 0 · 관찰 237 |
+| UI 관문 훅 | steward `surface-gate` | 양방향 확인 (낡은 기록 차단 · 최신 기록 통과) |
+| 하네스 계약 | `validate.mjs` | PASS (0 error) |
+
+미바인딩: **없음.**
+
+## drift 판정 (증분)
+
+| 변경 | 걸리는 정본 노드 | 처리 |
+|---|---|---|
+| `impl/surface-checks.mjs` · `impl/surface-verify.mjs` 신설 | `app.theme` · `app.shell` | `AC-app.theme-03` 신설, `app.rules` 옆에 `app.surface` Suite(케이스 10개) 신설 |
+| `tests/unit/surface-checks.test.ts` (25개) | — | 판정기 규칙을 못박는 단위 테스트. `app.surface` Suite 에 대응 |
+| `config.yaml` 바인딩 2개 + `ui_globs` | — | CLAUDE.md §7 값·능력 표와 UI 게이트 절에 반영 |
+| `surface-baseline.json` (237건) | `app.theme` 알려진 한계 | `gap-visual-baseline` 으로 등록, 우선순위까지 적음 |
+| `.gitignore` (기록·캡처 제외) | — | 명세 영향 없음 |
+
+**명시**: 이 증분은 제품 동작을 바꾸지 않았다. 화면 코드는 한 줄도 고치지 않았고,
+기존 시각 위반은 고치지 않고 **기준선으로 드러냈다** — 고치는 것은 디자인 결정이라
+유저에게 남긴다.
+
+판정: 통과.

@@ -266,9 +266,36 @@ compares the diff against them and blocks on unexplained drift.
 | `token-guard` | `npm run sweep` (tokens + layered imports + i18n + coverage + ledger) |
 | `ui-preview` | `.harness/steward/project/impl/ui-preview.md` (launch Electron, click through) |
 | `ui-shot` | `node .harness/steward/project/impl/ui-shot.mjs --nav=<testid>` |
-| `contrast-check`, `surface-verify` | **unbound** — no Electron surface adapter yet. Say "미바인딩" in the report; never silently pass. |
+| `surface-verify`, `contrast-check` | `node .harness/steward/project/impl/surface-verify.mjs` |
 
 Verify the wiring any time with `node .harness/steward/core/validate.mjs`.
+
+### The UI gate (`surface-verify`)
+
+Touching `src/renderer/**/*.tsx`, `src/renderer/styles/**/*.css` or
+`tailwind.config.ts` arms a commit gate: the hook demands a fresh verification
+record and **re-runs the judge itself** rather than trusting a claim of success.
+
+```bash
+node .harness/steward/project/impl/surface-verify.mjs              # every screen x 3 widths x 2 themes
+node .harness/steward/project/impl/surface-verify.mjs --nav=nav-bridge-bus --form=medium --theme=dark
+```
+
+- The **adapter** (`impl/surface-verify.mjs`) launches the built app with mock
+  drivers and extracts a normalized model — effective background colour, clipped
+  visible bounds, text size, states — into
+  `.harness/steward/artifacts/<branch>/surface-verify.json`, plus a screenshot
+  per capture.
+- The **judge** (`impl/surface-checks.mjs`) decides violations from that model
+  alone: contrast (WCAG 2.2 SC 1.4.3), overlap, truncation, fits, render errors,
+  hit targets. It must stay free of DOM/CSS vocabulary — that is what keeps it
+  reusable for another surface. Unit tests: `tests/unit/surface-checks.test.ts`.
+- Pre-existing findings live in `.harness/steward/project/surface-baseline.json`
+  (237 as of 2026-07-28: contrast on accent buttons/badges, one deliberate URL
+  ellipsis, two small targets). They are reported as observations, not blockers —
+  a gate that always fails gets ignored. Fix one, delete its line from the
+  baseline; never regenerate the whole file to silence a new finding.
+- Exit code `2` means **cannot-verify** and is never a pass.
 
 ### The previous `.claude` harness (legacy, still useful)
 

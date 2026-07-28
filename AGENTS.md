@@ -141,9 +141,16 @@ Rules that bind any agent:
 4. **Verify visually if a screen changed** — `node .harness/steward/project/impl/ui-shot.mjs --nav=<testid>`
    captures the built Electron app. Exit code `2` means *could not verify*; it is
    not a pass.
-5. **Never silently skip a check.** If a tool is missing (`contrast-check` and
-   `surface-verify` have no adapter yet), state that it was skipped.
-6. The immunity ledger at `.claude/immunity/ledger.md` still applies; Claude Code
+5. **Changing `src/renderer/**/*.tsx`, `src/renderer/styles/**`, or
+   `tailwind.config.ts` requires a fresh UI verification record** — run
+   `node .harness/steward/project/impl/surface-verify.mjs`. It renders every
+   screen across three widths and both themes, then judges contrast, overlap,
+   truncation, fits, render errors and hit targets. Known pre-existing findings
+   are in `.harness/steward/project/surface-baseline.json` and do not block; a new
+   one does.
+6. **Never silently skip a check.** If a capability is unbound or a tool is
+   missing, state that it was skipped rather than reporting a pass.
+7. The immunity ledger at `.claude/immunity/ledger.md` still applies; Claude Code
    enforces some entries with hooks, so violating them will look like a diff that
    only you were able to write.
 
