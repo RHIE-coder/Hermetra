@@ -1,10 +1,9 @@
-# `bridge` — 브리지 Service (UI 표시명 "설정 / Settings")
+# `bridge` — 브리지 Service (UI 표시명 "브리지 / Bridge")
 
 웹과 모바일을 잇는 계층. 이 제품이 웹 자동화 도구와 모바일 자동화 도구를 한 창에 담은
 것에 그치지 않는 이유가 여기 있다.
 
-> 표시명은 "설정 / Settings" 이지만 라우트·채널·폴더·타입은 `bridge` 를 유지한다
-> (`../architecture.md` §7).
+> 표시명·라우트·채널·폴더·타입이 모두 `bridge` 다 (`../architecture.md` §7).
 
 | Surface | ID | 라우트 | 정본 |
 |---|---|---|---|

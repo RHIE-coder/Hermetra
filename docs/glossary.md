@@ -11,8 +11,8 @@
 
 | 용어 | 뜻 | 코드 식별자 |
 |---|---|---|
-| 브리지 (Bridge) | 웹·모바일 자동화 세션을 잇는 계층. Hermetra 의 차별점 | `bridge` (라우트·IPC·모듈 폴더) |
-| 설정 / Settings | **브리지 모듈의 UI 표시명.** 내부 식별자는 의도적으로 `bridge` 를 유지한다 | 표시명만 다름 |
+| 브리지 (Bridge) | 웹·모바일 자동화 세션을 잇는 계층. Hermetra 의 차별점. UI 표시명도 같은 말이다 | `bridge` (라우트·IPC·모듈 폴더) |
+| ~~설정 / Settings~~ | 브리지 모듈의 옛 UI 표시명. 2026-07-29 폐기 — 본업(시나리오·변수·버스·이벤트)을 "설정"이라 부르면 안 보는 서랍으로 읽힌다 | 쓰지 않는다 |
 | 공유 버스 (Variable Bus) | 웹·모바일 스크립트가 실시간으로 값을 주고받는 변수 버스. 메모리에만 있고 앱을 끄면 비워진다 | `VarBus` |
 | 이벤트 버스 (Event Bus) | 한쪽에서 발행한 사건을 반대쪽이 받는 pub/sub 채널. 채널 이름은 `web.*`·`mobile.*`·`bridge.*` 로 구분한다 | `BridgeEventBus` |
 | 시나리오 (Scenario) | 웹·모바일을 넘나드는 순서 있는 단계 목록. 각 단계는 `{platform, scriptPath, waitFor?}` | `Orchestrator` |

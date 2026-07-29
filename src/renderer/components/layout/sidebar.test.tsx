@@ -116,3 +116,31 @@ describe('Sidebar — no accent, selection reads as depth', () => {
     }
   });
 });
+
+/**
+ * Two naming regressions worth pinning, both asserted by absence and therefore
+ * locale-independent (the provider picks its locale up from the host):
+ *
+ *   - The bridge group must not be called "Settings" / "설정" again. That label
+ *     filed this product's actual work — scenarios, variables, shared bus,
+ *     event stream — under the one word users read as "config I never open".
+ *   - The rail head carries no tagline. It was a landing-page line living in
+ *     permanent UI, and the only thing that genuinely changes there (the active
+ *     workspace) is the topbar's job.
+ */
+describe('Sidebar — naming', () => {
+  it('labels the bridge group "Bridge", never "Settings"', () => {
+    const { container } = renderSidebar('/bridge/bus');
+
+    expect(container.textContent).not.toMatch(/settings|설정/i);
+    expect(container.textContent).toMatch(/bridge|브리지/i);
+  });
+
+  it('shows the product name in the head with no tagline under it', () => {
+    const { container } = renderSidebar('/');
+    const head = container.querySelector('aside > div');
+
+    expect(head?.textContent?.trim()).toBe('Hermetra');
+    expect(container.textContent).not.toMatch(/automation bridge|자동화 브리지/i);
+  });
+});

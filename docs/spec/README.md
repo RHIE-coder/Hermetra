@@ -61,8 +61,8 @@ UI 라벨은 ID가 아니다 — 라벨은 `src/renderer/lib/messages.ts` 의 en
 
 Service 규칙(그 서비스 전체에 걸리는 정책·상태 소유)은 각 폴더의 `README.md` 에 있다.
 
-> `bridge` 는 UI에서 "설정 / Settings" 로 표시된다. 내부 식별자(라우트·IPC 채널·모듈 폴더)는
-> 의도적으로 `bridge` 를 유지한다 — `CLAUDE.md` 의 명명 규칙 참고.
+> `bridge` 는 UI에서도 "브리지 / Bridge" 로 표시된다 — 표시명과 내부 식별자(라우트·IPC
+> 채널·모듈 폴더)가 같다. `CLAUDE.md` 의 명명 규칙 참고.
 
 ## 상태 (2026-07-28 handover 기준)
 

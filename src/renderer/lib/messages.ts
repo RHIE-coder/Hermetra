@@ -41,11 +41,10 @@ const en = {
   'titlebar.brand': 'Hermetra',
 
   // sidebar
-  'sidebar.tagline': 'Web ⇄ Mobile automation bridge',
   'sidebar.footer': 'v0.1.0',
   'sidebar.group.web': 'Web',
   'sidebar.group.mobile': 'Mobile',
-  'sidebar.group.bridge': 'Settings',
+  'sidebar.group.bridge': 'Bridge',
   'sidebar.web.remote': 'Browser',
   'sidebar.web.code': 'Scripts',
   'sidebar.mobile.devices': 'Devices',
@@ -365,11 +364,10 @@ const ko: Record<keyof typeof en, string> = {
   'titlebar.brand': 'Hermetra',
 
   // sidebar
-  'sidebar.tagline': '웹과 모바일을 잇는 자동화 브리지',
   'sidebar.footer': 'v0.1.0',
   'sidebar.group.web': '웹',
   'sidebar.group.mobile': '모바일',
-  'sidebar.group.bridge': '설정',
+  'sidebar.group.bridge': '브리지',
   'sidebar.web.remote': '브라우저',
   'sidebar.web.code': '스크립트',
   'sidebar.mobile.devices': '디바이스',

@@ -48,6 +48,8 @@
 | CASE-app-013 | 현재 항목은 카드 안으로 눌려 표시된다(색이 아니라 깊이) | `app.theme` | UI | `sidebar.test.tsx` |
 | CASE-app-014 | 나머지 항목은 눌리지 않은 채 평평하다 | `app.theme` | UI | `sidebar.test.tsx` |
 | CASE-app-015 | 내비 항목이 영역별 카드 3장으로 묶인다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
+| CASE-app-016 | 브리지 그룹은 "브리지"로 표시되고 "설정"으로 되돌아가지 않는다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
+| CASE-app-017 | 사이드바 머리는 제품명 한 줄이고 태그라인이 없다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
 
 ## TestSuite: `app.rules` — 전역 규칙 (도구가 검사)
 

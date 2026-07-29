@@ -8,9 +8,9 @@ The companion file `AGENTS.md` defines the same rules for non-Claude agents. Kee
 
 ## 0. The product, in one paragraph
 
-Hermetra is a desktop Electron app that bridges **Web** (Playwright) and **Mobile** (Appium) automation sessions. The differentiator is the **Bridge** layer (rendered as "Settings" / "설정" in the UI): a shared variable bus, a cross-side event bus, and a scenario orchestrator that lets a single ordered scenario span both sides. See `ARCHITECTURE.md` for the long form.
+Hermetra is a desktop Electron app that bridges **Web** (Playwright) and **Mobile** (Appium) automation sessions. The differentiator is the **Bridge** layer (labelled "Bridge" / "브리지" in the UI as well): a shared variable bus, a cross-side event bus, and a scenario orchestrator that lets a single ordered scenario span both sides. See `ARCHITECTURE.md` for the long form.
 
-> Note on naming: the UI label for the Bridge module was renamed to **"Settings" / "설정"**. Internal identifiers — routes (`/bridge/*`), IPC channel names (`BRIDGE_*`), module folder (`modules/bridge`), domain types (`BridgeEvent`, `BridgeSide`) — keep the **`bridge`** name on purpose. Don't rename them or you'll churn IPC contracts and tests.
+> Note on naming: UI label and internal identifiers now agree — both are **`bridge`**. Routes (`/bridge/*`), IPC channel names (`BRIDGE_*`), module folder (`modules/bridge`) and domain types (`BridgeEvent`, `BridgeSide`) are load-bearing; renaming them churns IPC contracts and tests. The UI label was **"Settings" / "설정"** until 2026-07-29 and was reverted: the group holds this product's actual work (scenarios, variables, shared bus, event stream), and "Settings" reads as a drawer nobody opens.
 
 ---
 

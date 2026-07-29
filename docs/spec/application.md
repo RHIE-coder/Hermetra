@@ -9,13 +9,15 @@
 
 ### `app.shell.sidebar` — 사이드바
 
-폭 고정. 브랜드 마크 + 태그라인, 그룹 3개, 하단 푸터.
+폭 고정. 브랜드 마크 + 제품명 한 줄, 그룹 3개, 하단 푸터. 머리에 태그라인은 두지
+않는다 — 첫 실행에만 유효한 문구이고, 이 자리에서 실제로 바뀌는 정보(활성 워크스페이스)는
+상단바가 이미 들고 있다.
 
 | 그룹 | 액센트 | 항목 (라우트 / testid) |
 |---|---|---|
 | 웹 | `web` | 브라우저 `/web/remote` `nav-web-remote` · 스크립트 `/web/code` `nav-web-code` |
 | 모바일 | `mobile` | 디바이스 `/mobile/devices` `nav-mobile-devices` · 스크립트 `/mobile/code` `nav-mobile-code` · 인스펙터 `/mobile/inspector` `nav-mobile-inspector` |
-| 설정 | `bridge` | 시나리오 `/bridge/scenarios` · 변수 `/bridge/variables` · 공유 버스 `/bridge/bus` · 이벤트 `/bridge/events` |
+| 브리지 | `bridge` | 시나리오 `/bridge/scenarios` · 변수 `/bridge/variables` · 공유 버스 `/bridge/bus` · 이벤트 `/bridge/events` |
 
 인수조건:
 

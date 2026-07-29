@@ -76,12 +76,14 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-border bg-sidebar">
+      {/* Mark plus wordmark, one line — no tagline. "Web / Mobile automation
+          bridge" is a landing-page line: true on first launch, dead pixels
+          every launch after. The one thing that does change here, the active
+          workspace, already has a home in the topbar, so this stays a
+          nameplate and gives its vertical space back to the nav. */}
       <div className="flex h-12 items-center gap-2 border-b border-border px-3.5">
         <HermetraMark className="h-7 w-7" />
-        <div className="flex min-w-0 flex-col leading-tight">
-          <span className="text-sm font-semibold tracking-tight">{t('titlebar.brand')}</span>
-          <span className="truncate text-[10px] text-muted-foreground">{t('sidebar.tagline')}</span>
-        </div>
+        <span className="text-sm font-semibold tracking-tight">{t('titlebar.brand')}</span>
       </div>
 
       <nav className="flex-1 space-y-2 overflow-y-auto p-2">
