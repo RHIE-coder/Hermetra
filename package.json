@@ -17,15 +17,13 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "sweep": "node .claude/skills/sweep/scripts/run-all.mjs",
-    "sweep:tokens": "node .claude/skills/sweep/scripts/check-design-tokens.mjs",
-    "sweep:imports": "node .claude/skills/sweep/scripts/check-layered-imports.mjs",
-    "sweep:i18n": "node .claude/skills/sweep/scripts/check-i18n-pairs.mjs",
-    "sweep:coverage": "node .claude/skills/sweep/scripts/check-coverage.mjs",
-    "sweep:ledger": "node .claude/skills/sweep/scripts/check-ledger-violations.mjs",
-    "lint:ledger": "node .claude/skills/immunize/scripts/lint-ledger.mjs",
-    "preflight": "node .claude/scripts/preflight.mjs",
-    "bundle:setup": "node .claude/scripts/bundle-setup.mjs"
+    "sweep": "node .claude/checks/run-all.mjs",
+    "sweep:tokens": "node .claude/checks/check-design-tokens.mjs",
+    "sweep:imports": "node .claude/checks/check-layered-imports.mjs",
+    "sweep:i18n": "node .claude/checks/check-i18n-pairs.mjs",
+    "sweep:coverage": "node .claude/checks/check-coverage.mjs",
+    "sweep:ledger": "node .claude/checks/check-ledger-violations.mjs",
+    "lint:ledger": "node .claude/checks/lint-ledger.mjs"
   },
   "license": "AGPL-3.0-only",
   "devDependencies": {

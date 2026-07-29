@@ -316,16 +316,32 @@ node .harness/steward/project/impl/surface-verify.mjs --nav=nav-bridge-bus --for
   baseline; never regenerate the whole file to silence a new finding.
 - Exit code `2` means **cannot-verify** and is never a pass.
 
-### The previous `.claude` harness (legacy, still useful)
+### What `.claude/` is for
 
-`/intake`, `/quick`, `/sprint`, `/sweep`, `/immunize` and the `testwriter` /
-`implementer` / `auditor` / `sweeper` agents predate steward. They are **not**
-the default path anymore — don't start work with them. What stays live:
+The previous harness's **workflow layer** — `/intake`, `/quick`, `/sprint`,
+`/setup`, `/sweep`, `/immunize` and the `testwriter` / `implementer` /
+`auditor` / `sweeper` agents, plus the `HARNESS_SETUP.md` distribution bundle —
+was **deleted on 2026-07-29**. steward's phases do the same job, and keeping two
+sets of slash commands meant a request could take the dead path: those agents
+were told to read `.specs/active/<slug>.md`, which nothing writes any more, so
+they would have run with no spec at all.
 
-- **PreToolUse hooks** — `design-token-guard`, `immunity-rules-guard` (see below).
-- **Sweep scripts** — reached through steward's `token-guard` binding.
-- **Immunity ledger** — `/steward:immunize` writes to the same
-  `.claude/immunity/ledger.md`, so the hooks keep enforcing it.
+`.claude/` now holds only what is load-bearing, and none of it is a workflow:
+
+- **`settings.json`** — enables the `steward@steward` plugin and registers the
+  two PreToolUse hooks.
+- **`hooks/`** — `design-token-guard`, `immunity-rules-guard` (see below).
+- **`immunity/ledger.md`** — `/steward:immunize` writes here; the hooks enforce it.
+- **`checks/`** — the project's drift checks (tokens, layered imports, i18n
+  pairs, coverage, ledger), plus `lib/config.mjs` and `extractors/` that they
+  load, configured by `harness.config.json`. steward reaches them through its
+  `token-guard` binding (`npm run sweep`); the two hooks spawn
+  `check-design-tokens.mjs` / `check-ledger-violations.mjs` directly, so a guard
+  and a sweep can never disagree. They live under `.claude/` because a hook has
+  to sit in `.claude/hooks/` and imports `../lib/config.mjs` from there.
+
+Nothing under `.claude/` defines a skill or an agent any more. Don't add one
+there — steward owns phases.
 
 ### Active immunity rules
 
@@ -350,6 +366,5 @@ if the rule is genuinely wrong.
 | Run one check (e.g. tokens) | `npm run sweep:tokens` |
 | Run full project gate | `npm run check` |
 | Lint the ledger | `npm run lint:ledger` |
-| Preflight readiness | `npm run preflight` |
 | Check the steward wiring | `node .harness/steward/core/validate.mjs` |
 | Screenshot a screen | `node .harness/steward/project/impl/ui-shot.mjs --nav=nav-bridge-bus` |

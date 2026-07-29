@@ -1,8 +1,8 @@
 /**
  * config.mjs — Load and validate .claude/harness.config.json.
  *
- * Single source of truth for project-specific knobs the harness scripts read.
- * Used by sweep checks, sprint/check.mjs, preflight, and hooks.
+ * Single source of truth for project-specific knobs the check scripts read.
+ * Used by .claude/checks/* and the two PreToolUse hooks.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,7 +17,7 @@ export function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
     const err = new Error(
       `harness.config.json not found at ${CONFIG_PATH}\n` +
-        `Run /setup or copy from .claude/harness.config.schema.json to bootstrap.`,
+        `It configures the checks in .claude/checks/ — restore it from git history.`,
     );
     err.code = 'NO_HARNESS_CONFIG';
     throw err;

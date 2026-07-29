@@ -1,5 +1,4 @@
 {
-  "$schema": "./harness.config.schema.json",
   "version": "1.0",
   "project": {
     "name": "hermetra",
@@ -60,8 +59,5 @@
       "runner": "vitest",
       "summaryFile": "coverage/coverage-summary.json"
     }
-  },
-  "intake": {
-    "optionalSections": ["api-contract", "i18n", "multi-tenancy", "driver-compatibility"]
   }
 }

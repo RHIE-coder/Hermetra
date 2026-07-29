@@ -5,8 +5,8 @@
  * For each entry in .claude/immunity/ledger.md that has a `rule:` regex,
  * check the proposed write/edit content. If any rule matches, block.
  *
- * Re-uses .claude/skills/sweep/scripts/check-ledger-violations.mjs to keep
- * the rule semantics in one place.
+ * Re-uses .claude/checks/check-ledger-violations.mjs to keep the rule
+ * semantics in one place.
  *
  * Exit:
  *   0  → allow
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const HOOK_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HOOK_DIR, '..', '..');
-const SCANNER = path.join(ROOT, '.claude/skills/sweep/scripts/check-ledger-violations.mjs');
+const SCANNER = path.join(ROOT, '.claude/checks/check-ledger-violations.mjs');
 
 async function readPayload() {
   return new Promise((resolve, reject) => {

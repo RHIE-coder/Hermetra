@@ -4,8 +4,7 @@
  *
  * Blocks a write whose content references a Tailwind utility class with an
  * unregistered token. Re-uses the same scanner as
- * .claude/skills/sweep/scripts/check-design-tokens.mjs so the rule is
- * defined in one place.
+ * .claude/checks/check-design-tokens.mjs so the rule is defined in one place.
  *
  * Claude Code passes hook payload as JSON on stdin:
  *   { "tool_name": "Write" | "Edit",
@@ -23,7 +22,9 @@ import { tryLoadConfig } from '../lib/config.mjs';
 
 const HOOK_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HOOK_DIR, '..', '..');
-const SCANNER = path.join(ROOT, '.claude/skills/sweep/scripts/check-design-tokens.mjs');
+// A missing scanner exits non-zero, which blocks — the guard fails closed on a
+// bad path rather than waving writes through.
+const SCANNER = path.join(ROOT, '.claude/checks/check-design-tokens.mjs');
 
 async function readPayload() {
   return new Promise((resolve, reject) => {

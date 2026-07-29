@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { loadConfig } from '../../../lib/config.mjs';
+import { loadConfig } from '../lib/config.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 

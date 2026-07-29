@@ -1,8 +1,8 @@
 # Immunity Ledger
 
-Append-only record of mistakes the team has paid for. Every agent in the
-`/sprint` loop reads this file at the start of its turn and **must not violate
-any entry**. New entries are added via `/immunize`.
+Append-only record of mistakes the team has paid for. Every steward phase reads
+this file before writing code and **must not violate any entry**. New entries
+are added via `/steward:immunize`.
 
 Entry schema:
 
@@ -49,10 +49,11 @@ lesson is judgement-based.
   mistake: Wrote implementation first, tests last. Violates CLAUDE.md §3.2
     (Red → Green → Refactor) and §3.6 ("Failing test added first commit
     visible in history").
-  correct: For any new behavior, the FIRST commit on the branch must be a
-    failing test that captures the increment. The implementation commit comes
-    next. Use `/sprint` to enforce this order via the testwriter → implementer
-    → auditor agent loop.
+  correct: For any new behavior, the FIRST commit must be a failing test that
+    captures the increment. The implementation commit comes next. CLAUDE.md
+    §3.2 routes this per layer: pure logic / IPC contract / schema are
+    test-first without exception; UI and e2e may follow the implementation but
+    land in the same change.
   source: Scripts tree/folder feature, conversation 2026-05-22.
 
 - id: redesign-scope-overreach
@@ -64,13 +65,14 @@ lesson is judgement-based.
     only. Do not add pages, do not change navigation hierarchy, do not move
     sections around. If the reference implies structural change, ask first.
   source: Pre-existing memory `feedback_redesign_scope.md`, promoted to ledger
-    so it now blocks via auditor / sweeper checks.
+    so it now blocks via the review phase and `npm run sweep`.
 
 - id: esm-dirname-assumption
   added: 2026-05-22
   trigger: Writing Node scripts (.mjs / .ts / .js) anywhere in this project,
     especially helpers that get loaded by tooling outside the main app build
-    (Playwright globalSetup, tests/e2e/fixtures, .claude/scripts/*).
+    (Playwright globalSetup, tests/e2e/fixtures, `.claude/**/*.mjs`,
+    `.harness/steward/**/*.mjs`).
   mistake: Used `__dirname` or `__filename` directly. The project has
     `"type": "module"` in package.json so every file is ESM and those globals
     do not exist. Throws `ReferenceError: __dirname is not defined` at runtime,
@@ -85,6 +87,6 @@ lesson is judgement-based.
     (`const __dirname = path.dirname(fileURLToPath(import.meta.url))`) and
     incorrect usage share the same token and only differ at file scope —
     line-by-line regex cannot tell them apart without false positives.
-  source: /sprint electron-e2e-smoke, 2026-05-22; first Green attempt failed
+  source: legacy `/sprint` run "electron-e2e-smoke", 2026-05-22; first Green attempt failed
     at tests/e2e/setup/global-setup.ts:11 with ReferenceError. Fix applied
     to global-setup.ts and tests/e2e/fixtures/electron.ts.
