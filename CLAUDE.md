@@ -150,13 +150,14 @@ Coverage gates fail CI; don't push under threshold.
 - Tests must be **idempotent**. Each test writes to a temp dir under `os.tmpdir()`; never to the user's real `~/.hermetra/` or workspace.
 - A test that touches the filesystem **must** clean up in `afterEach`.
 
-### 3.6 New feature checklist
+### 3.6 New behavior checklist
 
-For any new behavior, the PR must include:
+There are no PRs here (§6) — this is the bar a change must clear before it is
+committed to `main`:
 
 1. ✅ Test-first layers (logic / IPC / schema) show the failing test in the first commit
 2. ✅ Implementation commit makes it green
-3. ✅ At least one test per affected layer (skip layers that don't apply, justify in PR body)
+3. ✅ At least one test per affected layer (skip layers that don't apply, justify in the commit message)
 4. ✅ `npm run check` (typecheck + lint + test + build) green
 5. ✅ `npm run test:e2e` smoke green
 6. ✅ Coverage thresholds not regressed
@@ -210,8 +211,12 @@ If we ever move to SQLite or similar, the **DB Schema** test layer above is wher
 - **No `// removed` comments**, no `unused_` renames. Delete dead code.
 - **No new pages/routes** without an explicit ask.
 - **No restructure to mirror a design reference.** If a screenshot is given, change tokens/styles only — see `memory/feedback_redesign_scope.md` for the incident this rule came from.
-- **No `--no-verify`, no `--amend` on shared commits**, no force-push to `main`.
-- **One feature, one PR.** Don't bundle unrelated cleanup.
+- **No `--no-verify`, no `--amend` on published commits**, no force-push to `main`.
+- **Work on `main`. Do not create branches.** No `feat/*`, `chore/*`, `docs/*`, no
+  PRs. This is a single-developer project; a branch per change is pure overhead
+  here. Commit straight to `main` when the user asks for a commit.
+- **One logical change, one commit.** Don't bundle unrelated cleanup. This is what
+  keeps history reviewable now that there are no PRs.
 
 ---
 
@@ -246,13 +251,27 @@ the harness itself; `/steward:handover` backfills the canonical docs.
 | Living test definitions (TestPlan>Scenario>Suite>Case) | `docs/qa/` |
 | Gate run records (append-only) | `docs/qa/runs/` |
 | Agreed vocabulary | `docs/glossary.md` |
-| Per-task batons (intake / build-report / findings / gate-report) | `.harness/steward/artifacts/<branch>/` |
-| Screenshots captured by `ui-shot` | `.harness/steward/artifacts/<branch>/shots/` (untracked) |
+| Per-task batons (intake / build-report / findings / gate-report) | `.harness/steward/artifacts/<work>/` |
+| Screenshots and UI verification records | `.harness/steward/artifacts/<work>/shots/`, `surface-verify.json` (both untracked) |
 | Past sprint specs of the previous harness | `.specs/done/` (frozen, historical) |
 
 `docs/spec/` and `docs/qa/` are **canonical and present-tense** — they describe
 what the product must be now, not what a task did. steward's `gate` phase
 compares the diff against them and blocks on unexplained drift.
+
+**Naming the baton without branches.** steward normally derives `<work>` from the
+git branch. Since everything happens on `main`, set `feature:` in
+`.harness/steward/config.yaml` at the start of any task that runs phases:
+
+```yaml
+feature: connection-session-wiring
+```
+
+Without it every task writes into the same folder and overwrites the previous
+task's baton. Clear the line (or set the next slug) when that task is done; the
+finished baton stays as its record. The two commit hooks — the gate and the UI
+gate — only arm while that folder exists, so a `[direct]` fix with no baton
+commits without ceremony, which is the intent.
 
 ### Project values and bindings (`.harness/steward/config.yaml`)
 
@@ -284,7 +303,7 @@ node .harness/steward/project/impl/surface-verify.mjs --nav=nav-bridge-bus --for
 - The **adapter** (`impl/surface-verify.mjs`) launches the built app with mock
   drivers and extracts a normalized model — effective background colour, clipped
   visible bounds, text size, states — into
-  `.harness/steward/artifacts/<branch>/surface-verify.json`, plus a screenshot
+  `.harness/steward/artifacts/<work>/surface-verify.json`, plus a screenshot
   per capture.
 - The **judge** (`impl/surface-checks.mjs`) decides violations from that model
   alone: contrast (WCAG 2.2 SC 1.4.3), overlap, truncation, fits, render errors,

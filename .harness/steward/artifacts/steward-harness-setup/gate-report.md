@@ -4,12 +4,12 @@ status: ready
 inputs: [handover-inventory, handover-report]
 ---
 
-# gate 리포트 — chore-steward-harness
+# gate 리포트 — steward-harness-setup
 
-기준 커밋 `125eb47` (검사 시점 HEAD) · 브랜치 `chore/steward-harness` · 2026-07-28
+기준 커밋 `125eb47` (검사 시점 HEAD) · main · 2026-07-28
 
 handover 단계가 전체 회귀를 돌렸고, 그 결과를 이 관문 리포트로 정리한다.
-회차 기록 정본: `docs/qa/runs/2026-07-28-chore-steward-harness.md`.
+회차 기록 정본: `docs/qa/runs/2026-07-28-steward-harness-setup.md`.
 
 ## 전체 검사
 

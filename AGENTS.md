@@ -85,7 +85,7 @@ Test-first layers run the full loop:
 - Idempotent. Each test writes to `os.tmpdir()`; never to the user's `~/.hermetra/`.
 - Clean up in `afterEach` for any fs/global mutation.
 
-### 3.6 PR / commit checklist
+### 3.6 Commit checklist (there are no PRs — see §4)
 
 For every behavior change:
 
@@ -107,8 +107,10 @@ For every behavior change:
 - No `// removed` comments; delete dead code.
 - No new pages/routes without an explicit ask.
 - No restructure to mirror a design reference — change tokens/styles only.
-- No `--no-verify`, no `--amend` on shared commits, no force-push to `main`.
-- One feature, one PR.
+- No `--no-verify`, no `--amend` on published commits, no force-push to `main`.
+- **Work on `main`; do not create branches or PRs.** Single-developer project —
+  a branch per change is overhead. Commit to `main` when asked to commit.
+- One logical change, one commit. That is what keeps history reviewable without PRs.
 
 ---
 
@@ -126,7 +128,7 @@ enforce still applies to you**:
 | Living test definitions | `docs/qa/` |
 | Gate run records (append-only) | `docs/qa/runs/` |
 | Agreed vocabulary | `docs/glossary.md` |
-| Per-task work artifacts | `.harness/steward/artifacts/<branch>/` |
+| Per-task work artifacts | `.harness/steward/artifacts/<work>/` — `<work>` comes from `feature:` in the config, not from a branch |
 | Past sprint specs (frozen) | `.specs/done/` |
 
 Rules that bind any agent:

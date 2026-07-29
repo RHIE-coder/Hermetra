@@ -1,4 +1,4 @@
-# 2026-07-28 · chore-steward-harness
+# 2026-07-28 · steward-harness-setup
 
 ## 회차 1 — handover 전체 회귀
 

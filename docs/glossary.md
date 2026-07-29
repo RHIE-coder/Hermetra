@@ -29,7 +29,7 @@
 |---|---|
 | 정본 (canonical) | "지금 제품이 어떠해야 하는가"를 담은 살아있는 문서 — `docs/spec/`(기획), `docs/qa/`(테스트 정의). 작업 기록이 아니다 |
 | 바통 (artifact) | 단계 사이에 넘기는 작업 산출물. `.harness/steward/artifacts/<작업폴더>/` 에 모인다 |
-| 작업폴더 | 바통이 모이는 폴더 이름. config 의 `feature:` → git 브랜치 슬러그 → `default` 순으로 정해진다 |
+| 작업폴더 | 바통이 모이는 폴더 이름. config 의 `feature:` 가 정한다. 이 프로젝트는 브랜치를 쓰지 않으므로(main 단독) `feature:` 를 비우면 전부 한 폴더에 섞인다 |
 | 드리프트 (drift) | 코드와 정본이 어긋난 상태. `gate` 단계가 변경분과 정본을 대조해 잡는다 |
 | 경로 판정 | 요청 크기에 따라 어느 단계를 타는지 정하는 것 — `consult`·`direct`·`hotfix`·`small`·`feature`·`greenfield` |
 | 빈자리 (values / bindings) | steward 가 선언하고 이 프로젝트가 채우는 자리. 값=명령·경로 리터럴, 능력=이 프로젝트의 구현 |

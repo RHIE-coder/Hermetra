@@ -6,7 +6,7 @@ inputs: [handover-inventory]
 
 # handover 보고 — 정본 백필
 
-기준 커밋 `125eb47` · 브랜치 `chore/steward-harness` · 2026-07-28
+기준 커밋 `125eb47` · main · 2026-07-28
 
 ## 커버리지 표 (기준표 대비)
 
@@ -41,7 +41,7 @@ inputs: [handover-inventory]
   계층 · 구현 파일(또는 미구현)을 적었다.
 - `docs/qa/coverage-gaps.md` — 구멍 7개를 전제와 함께. 의도된 것 1개(`gap-real-driver`),
   의도되지 않은 것 6개.
-- `docs/qa/runs/2026-07-28-chore-steward-harness.md` — 이번 전체 회귀 증빙.
+- `docs/qa/runs/2026-07-28-steward-harness-setup.md` — 이번 전체 회귀 증빙.
 - `docs/glossary.md` — 제품 용어 11 · 하네스 용어 8 (setup 단계에서 씨앗, 이번에 유지).
 
 ## 코드에 맞춰 고친 노드
