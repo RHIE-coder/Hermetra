@@ -63,6 +63,13 @@ const groups: NavGroup[] = [
  * into its card (darker fill, inset shadow) while every other row is flush.
  * That keeps the highlight inside the list's own grid instead of floating a
  * coloured box out of it, and it survives being seen in greyscale.
+ *
+ * The group title gets its own full-bleed band for the same reason. It used to
+ * be 10px muted text floating on the card — the weakest thing in the card that
+ * names it. Uppercase + wide tracking only lifts a Latin label, and these
+ * labels are "웹 / 모바일 / 브리지" in Korean, so the emphasis has to come from
+ * surface and contrast instead: a `muted` strip (darker than the card in both
+ * themes) divided off by a hairline, with the label at full foreground weight.
  */
 export function Sidebar() {
   const t = useT();
@@ -79,11 +86,11 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-2 overflow-y-auto p-2">
         {groups.map((group) => (
-          <section key={group.titleKey} className="rounded-lg bg-card p-1.5 shadow">
-            <h2 className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          <section key={group.titleKey} className="overflow-hidden rounded-lg bg-card shadow">
+            <h2 className="border-b border-border bg-muted px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">
               {t(group.titleKey)}
             </h2>
-            <ul className="space-y-0.5">
+            <ul className="space-y-0.5 p-1.5">
               {group.items.map((item) => (
                 <li key={item.to}>
                   <NavLink
