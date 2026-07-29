@@ -42,5 +42,3 @@ ui_globs:
   - "src/renderer/**/*.tsx"
   - "src/renderer/styles/**/*.css"
   - "tailwind.config.ts"
-
-feature: harness-legacy-cleanup
