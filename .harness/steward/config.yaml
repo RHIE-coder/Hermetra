@@ -2,7 +2,6 @@
 core: steward
 managed_by: steward
 schema_version: 1
-feature: sidebar-brand-and-bridge-label
 phases:
   - intake
   - spec
