@@ -61,19 +61,19 @@ export function Sidebar() {
   const t = useT();
 
   return (
-    <aside className="flex h-full w-60 flex-col border-r border-border bg-card/40">
-      <div className="flex h-14 items-center gap-2 px-5 border-b border-border">
-        <HermetraMark className="h-8 w-8" />
-        <div className="flex flex-col leading-tight">
+    <aside className="flex h-full w-56 flex-col border-r border-border bg-sidebar">
+      <div className="flex h-12 items-center gap-2 border-b border-border px-3.5">
+        <HermetraMark className="h-7 w-7" />
+        <div className="flex min-w-0 flex-col leading-tight">
           <span className="text-sm font-semibold tracking-tight">{t('titlebar.brand')}</span>
-          <span className="text-[10px] text-muted-foreground">{t('sidebar.tagline')}</span>
+          <span className="truncate text-[10px] text-muted-foreground">{t('sidebar.tagline')}</span>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-5">
+      <nav className="flex-1 space-y-4 overflow-y-auto p-2">
         {groups.map((group) => (
           <div key={group.titleKey}>
-            <div className="flex items-center gap-2 px-2 mb-2">
+            <div className="mb-1.5 flex items-center gap-2 px-2">
               <span
                 className={cn(
                   'h-1.5 w-1.5 rounded-full',
@@ -94,9 +94,16 @@ export function Sidebar() {
                     data-testid={item.testId}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors',
+                        // The selected row is marked inside its own grid — a lifted
+                        // fill plus a rail on the leading edge, never a box that
+                        // floats out of the list rhythm.
+                        'relative flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors',
                         'hover:bg-accent hover:text-foreground',
-                        isActive && 'bg-accent text-foreground font-medium',
+                        isActive && [
+                          'bg-card font-medium text-foreground shadow-sm',
+                          'before:absolute before:inset-y-1.5 before:left-0 before:w-0.5',
+                          'before:rounded-r-sm before:bg-primary before:content-[""]',
+                        ],
                       )
                     }
                   >
@@ -110,7 +117,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-border p-3 text-[10px] text-muted-foreground">
+      <div className="border-t border-border p-2.5 text-[10px] text-muted-foreground">
         {t('sidebar.footer')}
       </div>
     </aside>

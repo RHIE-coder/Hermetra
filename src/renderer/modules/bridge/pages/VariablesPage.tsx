@@ -44,12 +44,12 @@ export function VariablesPage() {
   const priv = doc.privateVariables[selectedProfileId] || [];
 
   return (
-    <div data-testid="page-bridge-variables" className="gradient-bridge min-h-full p-6 space-y-6">
+    <div data-testid="page-bridge-variables" className="min-h-full p-5 space-y-4">
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Sliders className="h-5 w-5 text-bridge" />
-            <h1 className="text-2xl font-semibold tracking-tight">{t('vars.title')}</h1>
+            <Sliders className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('vars.title')}</h1>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">{t('vars.subtitle')}</p>
         </div>

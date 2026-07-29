@@ -36,7 +36,11 @@ lesson is judgement-based.
     missing, add it to `global.css` + `tailwind.config.ts` first. Reuse the
     existing semantic tokens (`card`, `accent`, `muted`, `destructive`, ...)
     or the `.panel` component class for floating opaque surfaces.
-  rule: \b(?:bg|text|border|ring|from|via|to|decoration|outline|divide|placeholder|caret|fill|stroke|shadow)-(?:popover|sidebar|input-foreground|popover-foreground|sidebar-foreground|sidebar-accent|sidebar-border|sidebar-ring|chart-[1-9])\b
+    Bare `sidebar` left the deny-list on 2026-07-29: the teal/compact design
+    system registers `--sidebar` in `global.css` and `sidebar` in
+    `tailwind.config.ts`, so it is a real token now. Its shadcn sub-tokens
+    (`sidebar-foreground`, `sidebar-accent`, ...) are still fabrications.
+  rule: \b(?:bg|text|border|ring|from|via|to|decoration|outline|divide|placeholder|caret|fill|stroke|shadow)-(?:popover|input-foreground|popover-foreground|sidebar-foreground|sidebar-accent|sidebar-border|sidebar-ring|chart-[1-9])\b
   source: CodeEditor.tsx dropdown menu rendered transparent; user incident 2026-05-22.
 
 - id: tdd-implementation-first

@@ -84,12 +84,12 @@ export function RemoteBrowserPage() {
   };
 
   return (
-    <div data-testid="page-web-remote" className="gradient-web min-h-full p-6 space-y-6">
+    <div data-testid="page-web-remote" className="min-h-full p-5 space-y-4">
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Globe className="h-5 w-5 text-web" />
-            <h1 className="text-2xl font-semibold tracking-tight">{t('web.remote.title')}</h1>
+            <Globe className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('web.remote.title')}</h1>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">{t('web.remote.subtitle')}</p>
         </div>
@@ -144,7 +144,7 @@ export function RemoteBrowserPage() {
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant={browserInstalled ? 'outline' : 'web'}
+              variant={browserInstalled ? 'outline' : 'default'}
               size="sm"
               disabled={installRunning}
               onClick={() => void installBrowser()}
@@ -203,7 +203,7 @@ export function RemoteBrowserPage() {
             </div>
             <div className="flex gap-2">
               <Button
-                variant={status.isRunning ? 'destructive' : 'web'}
+                variant={status.isRunning ? 'destructive' : 'default'}
                 className="flex-1"
                 disabled={loading || (!status.isRunning && !browserInstalled)}
                 onClick={onToggle}

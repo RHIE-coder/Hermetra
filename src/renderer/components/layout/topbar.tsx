@@ -15,11 +15,11 @@ export function Topbar() {
   const t = useT();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border px-5 bg-background/60 backdrop-blur">
+    <header className="flex h-12 items-center justify-between border-b border-border bg-topbar px-4">
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <WorkspaceSwitcher />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <Badge variant={webRunning ? 'web' : 'outline'}>
           <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current" />
           {t('topbar.web')} {webRunning ? t('common.on') : t('common.off')}
@@ -28,7 +28,11 @@ export function Topbar() {
           <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current" />
           {t('topbar.mobile')} {appiumRunning ? t('common.on') : t('common.off')}
         </Badge>
-        <Badge variant="bridge">{t('topbar.busEvents', { bus: busCount, events: eventCount })}</Badge>
+        {/* Colour means "there is something here". An idle bus is not news, so
+            the counter stays neutral until it actually holds something. */}
+        <Badge variant={busCount + eventCount > 0 ? 'bridge' : 'outline'}>
+          {t('topbar.busEvents', { bus: busCount, events: eventCount })}
+        </Badge>
         <LanguageToggle />
         <ThemeToggle />
       </div>

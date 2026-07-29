@@ -15,12 +15,12 @@ export function EventStreamPage() {
   const t = useT();
 
   return (
-    <div data-testid="page-bridge-events" className="gradient-bridge min-h-full p-6 space-y-6">
+    <div data-testid="page-bridge-events" className="min-h-full p-5 space-y-4">
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-bridge" />
-            <h1 className="text-2xl font-semibold tracking-tight">{t('bridge.events.title')}</h1>
+            <Activity className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('bridge.events.title')}</h1>
           </div>
           <p className="text-sm text-muted-foreground">{t('bridge.events.subtitle')}</p>
         </div>
@@ -61,7 +61,6 @@ export function EventStreamPage() {
               ))}
             </div>
             <Button
-              variant="bridge"
               disabled={!channel.trim()}
               onClick={() => emitEvent(channel.trim(), side)}
             >

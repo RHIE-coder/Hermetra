@@ -141,12 +141,12 @@ export function MobileInspectorPage() {
     : t('mobile.inspector.sessionDisconnected');
 
   return (
-    <div data-testid="page-mobile-inspector" className="gradient-mobile min-h-full p-6 space-y-6">
+    <div data-testid="page-mobile-inspector" className="min-h-full p-5 space-y-4">
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Crosshair className="h-5 w-5 text-mobile" />
-            <h1 className="text-2xl font-semibold tracking-tight">{t('mobile.inspector.title')}</h1>
+            <Crosshair className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('mobile.inspector.title')}</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{t('mobile.inspector.subtitle')}</p>
         </div>
@@ -165,7 +165,7 @@ export function MobileInspectorPage() {
       {showWarning && (
         <div
           data-testid="inspector-warning-banner"
-          className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          className="rounded-lg border border-danger/25 bg-danger/15 px-4 py-3 text-sm text-danger"
         >
           {t('mobile.inspector.appiumNotConnected')}
         </div>

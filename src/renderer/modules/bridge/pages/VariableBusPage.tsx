@@ -15,12 +15,12 @@ export function VariableBusPage() {
   const t = useT();
 
   return (
-    <div data-testid="page-bridge-bus" className="gradient-bridge min-h-full p-6 space-y-6">
+    <div data-testid="page-bridge-bus" className="min-h-full p-5 space-y-4">
       <header className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Cable className="h-5 w-5 text-bridge" />
-            <h1 className="text-2xl font-semibold tracking-tight">{t('bridge.bus.title')}</h1>
+            <Cable className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('bridge.bus.title')}</h1>
           </div>
           <p className="text-sm text-muted-foreground">{t('bridge.bus.subtitle')}</p>
         </div>
@@ -47,7 +47,6 @@ export function VariableBusPage() {
               onChange={(e) => setNewValue(e.target.value)}
             />
             <Button
-              variant="bridge"
               disabled={!newKey.trim()}
               onClick={() => {
                 void setVar(newKey.trim(), newValue);

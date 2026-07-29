@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useT } from '@/lib/i18n';
 import type { MessageKey } from '@/lib/messages';
+import { EDITOR_THEME_NAME, applyEditorTheme, type MonacoThemeHost } from '@/lib/editor-theme';
 
 function detectLanguage(path: string | undefined): string {
   if (!path) return 'typescript';
@@ -160,7 +161,7 @@ export function CodeEditor({
 }: Props) {
   const t = useT();
   const { resolvedTheme } = useTheme();
-  const editorTheme = resolvedTheme === 'dark' ? 'vs-dark' : 'light';
+  const monacoRef = useRef<MonacoThemeHost | null>(null);
   const [draft, setDraft] = useState<ScriptFileBody | null>(current);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [menuParent, setMenuParent] = useState<string | null>(null);
@@ -180,6 +181,17 @@ export function CodeEditor({
   useEffect(() => {
     setDraft(current);
   }, [current]);
+
+  // The editor theme is built out of design tokens, and those tokens change
+  // value when the app theme flips — so it has to be rebuilt, not just
+  // re-selected. The frame delay lets next-themes stamp `data-theme` on the
+  // document first; reading tokens before that yields the outgoing palette.
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!monaco) return undefined;
+    const frame = requestAnimationFrame(() => applyEditorTheme(monaco, resolvedTheme === 'dark'));
+    return () => cancelAnimationFrame(frame);
+  }, [resolvedTheme]);
 
   // Expand the parent folder of the current file so its file is visible.
   useEffect(() => {
@@ -567,7 +579,9 @@ export function CodeEditor({
   const renderMenu = (parent: string, indentDepth: number) => (
     <div
       ref={menuRef}
-      className="panel z-20 my-1 mx-1 border border-border text-xs"
+      // A menu genuinely floats, so it takes the overlay elevation rather than
+      // the panel one. No border: the 1px ring is already inside the shadow.
+      className="panel z-20 mx-1 my-1 text-xs shadow-lg"
       style={{ marginLeft: 4 + indentDepth * 12 }}
       data-testid="script-create-menu"
     >
@@ -621,8 +635,8 @@ export function CodeEditor({
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Terminal className={cn('h-5 w-5', accent === 'web' ? 'text-web' : 'text-mobile')} />
-            <h1 className="text-2xl font-semibold tracking-tight">{t(titleKey)}</h1>
+            <Terminal className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t(titleKey)}</h1>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">{t(subtitleKey)}</p>
         </div>
@@ -630,7 +644,6 @@ export function CodeEditor({
           {rightHeader}
           <Badge variant={ready ? accent : 'outline'}>{ready ? readyLabel : notReadyLabel}</Badge>
           <Button
-            variant={accent}
             disabled={!ready || busy || !draft}
             onClick={() => void handleRun()}
           >
@@ -641,7 +654,7 @@ export function CodeEditor({
       </header>
 
       <div className="grid grid-cols-[240px_1fr] gap-4 min-h-[60vh]">
-        <aside className="rounded-xl border border-border bg-card/50 overflow-hidden flex flex-col">
+        <aside className="rounded-lg bg-card shadow overflow-hidden flex flex-col">
           <div className="relative flex items-center justify-between px-3 py-2 border-b border-border">
             <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               {t('web.code.files')}
@@ -730,7 +743,11 @@ export function CodeEditor({
               height="100%"
               language={language}
               value={draft?.source ?? ''}
-              theme={editorTheme}
+              theme={EDITOR_THEME_NAME}
+              beforeMount={(monaco) => {
+                monacoRef.current = monaco as MonacoThemeHost;
+                applyEditorTheme(monacoRef.current, resolvedTheme === 'dark');
+              }}
               onChange={(value) =>
                 setDraft(
                   draft
@@ -740,7 +757,7 @@ export function CodeEditor({
               }
               options={{
                 minimap: { enabled: false },
-                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                fontFamily: 'Geist Mono, ui-monospace, monospace',
                 fontSize: 13,
                 lineHeight: 20,
                 scrollBeyondLastLine: false,

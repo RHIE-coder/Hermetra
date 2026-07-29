@@ -202,11 +202,10 @@ export function ConnectionConfigTab() {
       className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4"
     >
       {/* Left panel: in-use + device tree */}
-      <aside className="rounded-xl border border-border bg-card text-card-foreground p-4 space-y-4">
+      <aside className="rounded-lg bg-card text-card-foreground shadow p-4 space-y-4">
         <header className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">{t('mobile.conn.title')}</h3>
           <Button
-            variant="mobile"
             size="sm"
             data-testid="conn-config-new-btn"
             onClick={handleOpenNew}
@@ -293,7 +292,7 @@ export function ConnectionConfigTab() {
       {selectedConn ? (
         <section
           data-testid="conn-edit-panel"
-          className="rounded-xl border border-border bg-card text-card-foreground p-5 space-y-4"
+          className="rounded-lg bg-card text-card-foreground shadow p-4 space-y-4"
         >
           <header className="flex items-center justify-between">
             <h3 className="text-base font-semibold">{t('mobile.conn.edit.title')}</h3>
@@ -431,7 +430,6 @@ export function ConnectionConfigTab() {
 
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
             <Button
-              variant="mobile"
               size="sm"
               data-testid="conn-edit-save-btn"
               onClick={() => void handleSave()}
@@ -463,7 +461,7 @@ export function ConnectionConfigTab() {
               className={cn(
                 'rounded-md border px-3 py-2 text-xs',
                 lastTest.ok
-                  ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-500'
+                  ? 'border-success/40 bg-success/15 text-success'
                   : 'border-destructive/40 bg-destructive/5 text-destructive',
               )}
             >
@@ -485,7 +483,7 @@ export function ConnectionConfigTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm">
           <div
             data-testid="conn-new-dialog"
-            className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl"
+            className="w-full max-w-md rounded-lg bg-card shadow-lg"
           >
             <div className="border-b border-border px-5 py-3">
               <h3 className="text-base font-semibold">{t('mobile.conn.new')}</h3>
@@ -516,7 +514,6 @@ export function ConnectionConfigTab() {
                 {t('common.cancel')}
               </Button>
               <Button
-                variant="mobile"
                 size="sm"
                 data-testid="conn-new-create-btn"
                 onClick={() => void handleCreateNew()}

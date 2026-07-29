@@ -43,12 +43,12 @@ export function ScenariosPage() {
   };
 
   return (
-    <div data-testid="page-bridge-scenarios" className="gradient-bridge min-h-full p-6 space-y-6">
+    <div data-testid="page-bridge-scenarios" className="min-h-full p-5 space-y-4">
       <header className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Workflow className="h-5 w-5 text-bridge" />
-            <h1 className="text-2xl font-semibold tracking-tight">{t('bridge.scenarios.title')}</h1>
+            <Workflow className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('bridge.scenarios.title')}</h1>
           </div>
           <p className="text-sm text-muted-foreground">{t('bridge.scenarios.subtitle')}</p>
         </div>
@@ -59,7 +59,6 @@ export function ScenariosPage() {
             </Button>
           ) : (
             <Button
-              variant="bridge"
               disabled={!selected}
               onClick={() => selected && runScenario(selected.id)}
             >
@@ -131,7 +130,7 @@ export function ScenariosPage() {
                       className={cn(
                         'flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors',
                         u?.status === 'running' && 'border-bridge bg-bridge/5',
-                        u?.status === 'completed' && 'border-emerald-500/40',
+                        u?.status === 'completed' && 'border-success/40',
                         u?.status === 'failed' && 'border-destructive/40 bg-destructive/5',
                       )}
                     >
@@ -170,7 +169,7 @@ export function ScenariosPage() {
                             </span>
                           )}
                           {step.emits && (
-                            <span className="rounded-md bg-emerald-500/15 text-emerald-500 px-2 py-0.5">
+                            <span className="rounded-md bg-success/15 text-success px-2 py-0.5">
                               {t('bridge.scenarios.emitTag', { channel: step.emits })}
                             </span>
                           )}

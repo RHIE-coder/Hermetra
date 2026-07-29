@@ -161,12 +161,12 @@ export function DevicesPage() {
   const toolingOk = isToolingOk(tooling);
 
   return (
-    <div data-testid="page-mobile-devices" className="gradient-mobile min-h-full p-6 space-y-6">
+    <div data-testid="page-mobile-devices" className="min-h-full p-5 space-y-4">
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-mobile" />
-            <h1 className="text-2xl font-semibold tracking-tight">{t('mobile.devices.title')}</h1>
+            <Smartphone className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('mobile.devices.title')}</h1>
             <div
               className="relative"
               onMouseEnter={() => setToolingHover(true)}
@@ -195,7 +195,7 @@ export function DevicesPage() {
               {toolingHover && (
                 <div
                   data-testid="tooling-status-overlay"
-                  className="absolute left-0 top-full z-50 mt-2 w-[420px] rounded-xl border border-border bg-card p-4 text-card-foreground shadow-lg space-y-3"
+                  className="absolute left-0 top-full z-50 mt-2 w-[420px] rounded-lg bg-card p-4 text-card-foreground shadow-lg space-y-3"
                 >
                   <div>
                     <div className="text-sm font-semibold">{t('mobile.devices.tooling')}</div>
@@ -257,7 +257,7 @@ export function DevicesPage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
-                        variant={appium.isRunning && appium.mode === 'local' ? 'destructive' : 'mobile'}
+                        variant={appium.isRunning && appium.mode === 'local' ? 'destructive' : 'default'}
                         size="sm"
                         onClick={() =>
                           appium.isRunning && appium.mode === 'local' ? stopAppium() : startAppium()
@@ -359,7 +359,6 @@ export function DevicesPage() {
                               <Badge variant="success">{t('common.installed')}</Badge>
                             ) : (
                               <Button
-                                variant="mobile"
                                 size="sm"
                                 data-testid={`device-save-btn-${d.id}`}
                                 onClick={() => void handleSaveLive(d)}
@@ -431,7 +430,7 @@ export function DevicesPage() {
             {selectedDeviceKey && (selectedSaved || selectedLive) ? (
               <section
                 data-testid="device-detail-panel"
-                className="rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+                className="rounded-lg bg-card text-card-foreground shadow"
               >
                 <div className="p-5 space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -517,7 +516,6 @@ export function DevicesPage() {
                       ) : (
                         <div className="border-t border-border pt-4">
                           <Button
-                            variant="mobile"
                             size="sm"
                             data-testid="device-detail-save-btn"
                             onClick={() => void handleSaveSelected()}
@@ -582,7 +580,7 @@ export function DevicesPage() {
                 </div>
               </section>
             ) : (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border p-5 text-center text-xs text-muted-foreground">
                 {t('mobile.devices.detail')}
               </div>
             )}
