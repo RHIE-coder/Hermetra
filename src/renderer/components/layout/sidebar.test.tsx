@@ -63,3 +63,56 @@ describe('Sidebar — mobile-inspector nav item', () => {
     expect(code.compareDocumentPosition(inspector) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+/**
+ * The navigation carries no module accent — no coloured group dot, no coloured
+ * rail on the selected row. That was asked for twice: the first time it was
+ * read as "cards only" and the rail survived, which is why it is pinned here
+ * rather than left to judgement.
+ *
+ * Selection still has to be visible without colour, so it is expressed as
+ * depth: the chosen row is pressed into its group card.
+ */
+const ACCENT_CLASS = /\b(?:bg|text|border|ring|from|via|to)-(?:web|mobile|bridge)(?:\/\d+)?\b/;
+
+describe('Sidebar — no accent, selection reads as depth', () => {
+  it('renders no module accent class anywhere in the rail', () => {
+    const { container } = renderSidebar('/web/remote');
+
+    const offenders = [...container.querySelectorAll<HTMLElement>('[class]')]
+      .map((el) => el.className)
+      .filter((c) => typeof c === 'string' && ACCENT_CLASS.test(c));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('marks the current route by pressing its row in, not by tinting it', () => {
+    renderSidebar('/web/remote');
+    const active = screen.getByTestId('nav-web-remote');
+
+    expect(active.className).toContain('bg-muted');
+    expect(active.className).toContain('shadow-inner');
+    expect(active.className).toContain('font-semibold');
+    // No rail: a `before:` bar in the signal colour is the shape that was cut.
+    expect(active.className).not.toContain('before:bg-primary');
+  });
+
+  it('leaves every other row flush', () => {
+    renderSidebar('/web/remote');
+    const other = screen.getByTestId('nav-bridge-bus');
+
+    expect(other.className).not.toContain('bg-muted');
+    expect(other.className).not.toContain('shadow-inner');
+  });
+
+  it('groups the items into one card per section', () => {
+    const { container } = renderSidebar('/');
+    const cards = container.querySelectorAll('nav > section');
+
+    expect(cards).toHaveLength(3);
+    for (const card of cards) {
+      expect(card.className).toContain('bg-card');
+      expect(card.className).toContain('shadow');
+    }
+  });
+});

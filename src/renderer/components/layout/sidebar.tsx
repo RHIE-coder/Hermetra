@@ -23,14 +23,12 @@ interface NavItem {
 
 interface NavGroup {
   titleKey: MessageKey;
-  accent: 'web' | 'mobile' | 'bridge';
   items: NavItem[];
 }
 
 const groups: NavGroup[] = [
   {
     titleKey: 'sidebar.group.web',
-    accent: 'web',
     items: [
       { to: '/web/remote', labelKey: 'sidebar.web.remote', icon: Globe, testId: 'nav-web-remote' },
       { to: '/web/code', labelKey: 'sidebar.web.code', icon: Terminal, testId: 'nav-web-code' },
@@ -38,7 +36,6 @@ const groups: NavGroup[] = [
   },
   {
     titleKey: 'sidebar.group.mobile',
-    accent: 'mobile',
     items: [
       { to: '/mobile/devices', labelKey: 'sidebar.mobile.devices', icon: Smartphone, testId: 'nav-mobile-devices' },
       { to: '/mobile/code', labelKey: 'sidebar.mobile.code', icon: Terminal, testId: 'nav-mobile-code' },
@@ -47,7 +44,6 @@ const groups: NavGroup[] = [
   },
   {
     titleKey: 'sidebar.group.bridge',
-    accent: 'bridge',
     items: [
       { to: '/bridge/scenarios', labelKey: 'sidebar.bridge.scenarios', icon: Workflow, testId: 'nav-bridge-scenarios' },
       { to: '/bridge/variables', labelKey: 'sidebar.bridge.variables', icon: Sliders, testId: 'nav-bridge-variables' },
@@ -57,6 +53,17 @@ const groups: NavGroup[] = [
   },
 ];
 
+/**
+ * The rail is the darkest surface in the app; each group is a card lifted out
+ * of it. Nothing here is tinted — the sidebar used to mark its groups and its
+ * selected row with module accents, and an accent on a card is exactly what
+ * this product's design forbids.
+ *
+ * Selection therefore reads by depth, not colour: the chosen row is pressed
+ * into its card (darker fill, inset shadow) while every other row is flush.
+ * That keeps the highlight inside the list's own grid instead of floating a
+ * coloured box out of it, and it survives being seen in greyscale.
+ */
 export function Sidebar() {
   const t = useT();
 
@@ -70,22 +77,12 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-4 overflow-y-auto p-2">
+      <nav className="flex-1 space-y-2 overflow-y-auto p-2">
         {groups.map((group) => (
-          <div key={group.titleKey}>
-            <div className="mb-1.5 flex items-center gap-2 px-2">
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  group.accent === 'web' && 'bg-web',
-                  group.accent === 'mobile' && 'bg-mobile',
-                  group.accent === 'bridge' && 'bg-bridge',
-                )}
-              />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                {t(group.titleKey)}
-              </span>
-            </div>
+          <section key={group.titleKey} className="rounded-lg bg-card p-1.5 shadow">
+            <h2 className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {t(group.titleKey)}
+            </h2>
             <ul className="space-y-0.5">
               {group.items.map((item) => (
                 <li key={item.to}>
@@ -94,16 +91,9 @@ export function Sidebar() {
                     data-testid={item.testId}
                     className={({ isActive }) =>
                       cn(
-                        // The selected row is marked inside its own grid — a lifted
-                        // fill plus a rail on the leading edge, never a box that
-                        // floats out of the list rhythm.
-                        'relative flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors',
+                        'flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors',
                         'hover:bg-accent hover:text-foreground',
-                        isActive && [
-                          'bg-card font-medium text-foreground shadow-sm',
-                          'before:absolute before:inset-y-1.5 before:left-0 before:w-0.5',
-                          'before:rounded-r-sm before:bg-primary before:content-[""]',
-                        ],
+                        isActive && 'bg-muted font-semibold text-foreground shadow-inner',
                       )
                     }
                   >
@@ -113,7 +103,7 @@ export function Sidebar() {
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         ))}
       </nav>
 

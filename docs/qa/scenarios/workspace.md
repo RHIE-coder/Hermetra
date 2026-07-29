@@ -27,7 +27,7 @@
 
 ## TestSuite: `app.shell` — 앱 셸
 
-구현: `src/renderer/components/layout/sidebar.test.tsx` (3) ·
+구현: `src/renderer/components/layout/sidebar.test.tsx` (7) ·
 `src/renderer/components/layout/topbar.test.tsx` (3) ·
 `tests/e2e/smoke.spec.ts` (3 — 항목 9개 존재 + 각 항목 이동 포함)
 
@@ -44,6 +44,10 @@
 | CASE-app-009 | 알 수 없는 라우트가 홈으로 되돌려진다 | `app.shell` | UI | 미구현 |
 | CASE-app-010 | 버스·이벤트가 비어 있으면 카운터가 중립이다 | `app.theme` | UI | `topbar.test.tsx` |
 | CASE-app-011 | 버스나 이벤트에 값이 생기면 카운터가 틴트를 입는다 | `app.theme` | UI | `topbar.test.tsx` |
+| CASE-app-012 | 사이드바 어디에도 영역 액센트 색이 없다 | `app.theme` | UI | `sidebar.test.tsx` |
+| CASE-app-013 | 현재 항목은 카드 안으로 눌려 표시된다(색이 아니라 깊이) | `app.theme` | UI | `sidebar.test.tsx` |
+| CASE-app-014 | 나머지 항목은 눌리지 않은 채 평평하다 | `app.theme` | UI | `sidebar.test.tsx` |
+| CASE-app-015 | 내비 항목이 영역별 카드 3장으로 묶인다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
 
 ## TestSuite: `app.rules` — 전역 규칙 (도구가 검사)
 

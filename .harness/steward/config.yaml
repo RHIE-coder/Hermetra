@@ -42,3 +42,5 @@ ui_globs:
   - "src/renderer/**/*.tsx"
   - "src/renderer/styles/**/*.css"
   - "tailwind.config.ts"
+
+feature: sidebar-depth-fix
