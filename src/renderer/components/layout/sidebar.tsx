@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  ChevronRight,
   Globe,
   Smartphone,
   Workflow,
@@ -53,6 +55,31 @@ const groups: NavGroup[] = [
   },
 ];
 
+const LEGACY_OPEN_KEY = 'hermetra.sidebar.legacyOpen';
+
+/**
+ * Starts **open**, and remembers.
+ *
+ * Every screen this app has lives inside the drawer, so opening collapsed would
+ * hide the app from itself on first launch. Folding it away is therefore a
+ * deliberate act — and one the app does not undo behind your back.
+ */
+const readStoredOpen = (): boolean => {
+  try {
+    return window.localStorage.getItem(LEGACY_OPEN_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+};
+
+const writeStoredOpen = (open: boolean): void => {
+  try {
+    window.localStorage.setItem(LEGACY_OPEN_KEY, String(open));
+  } catch {
+    /* a rail that cannot remember is still a rail */
+  }
+};
+
 /**
  * The rail is the darkest surface in the app; each group is a card lifted out
  * of it. Nothing here is tinted — the sidebar used to mark its groups and its
@@ -64,15 +91,21 @@ const groups: NavGroup[] = [
  * That keeps the highlight inside the list's own grid instead of floating a
  * coloured box out of it, and it survives being seen in greyscale.
  *
- * The group title gets its own full-bleed band for the same reason. It used to
- * be 10px muted text floating on the card — the weakest thing in the card that
- * names it. Uppercase + wide tracking only lifts a Latin label, and these
- * labels are "웹 / 모바일 / 브리지" in Korean, so the emphasis has to come from
- * surface and contrast instead: a `muted` strip (darker than the card in both
- * themes) divided off by a hairline, with the label at full foreground weight.
+ * The three groups sit inside one collapsible card rather than standing as three
+ * of their own. The group title owns a full-bleed band in this rail, and a band
+ * inside a band reads as two competing headers — so a shelf one level down is a
+ * plain muted label instead.
  */
 export function Sidebar() {
   const t = useT();
+  const [open, setOpen] = useState(readStoredOpen);
+
+  const toggle = () => {
+    setOpen((wasOpen) => {
+      writeStoredOpen(!wasOpen);
+      return !wasOpen;
+    });
+  };
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-border bg-sidebar">
@@ -87,33 +120,59 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-2 overflow-y-auto p-2">
-        {groups.map((group) => (
-          <section key={group.titleKey} className="overflow-hidden rounded-lg bg-card shadow">
-            <h2 className="border-b border-border bg-muted px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">
-              {t(group.titleKey)}
-            </h2>
-            <ul className="space-y-0.5 p-1.5">
-              {group.items.map((item) => (
-                <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    data-testid={item.testId}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors',
-                        'hover:bg-accent hover:text-foreground',
-                        isActive && 'bg-muted font-semibold text-foreground shadow-inner',
-                      )
-                    }
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{t(item.labelKey)}</span>
-                  </NavLink>
-                </li>
+        <section className="overflow-hidden rounded-lg bg-card shadow">
+          <h2>
+            <button
+              type="button"
+              data-testid="nav-legacy-toggle"
+              aria-expanded={open}
+              onClick={toggle}
+              className={cn(
+                'flex h-8 w-full items-center gap-1.5 bg-muted px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground',
+                'transition-colors hover:bg-accent',
+                open && 'border-b border-border',
+              )}
+            >
+              <ChevronRight
+                className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')}
+                aria-hidden="true"
+              />
+              <span>{t('sidebar.group.legacy')}</span>
+            </button>
+          </h2>
+
+          {open && (
+            <div className="space-y-1 p-1.5">
+              {groups.map((group) => (
+                <div key={group.titleKey}>
+                  <p className="px-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                    {t(group.titleKey)}
+                  </p>
+                  <ul className="space-y-0.5">
+                    {group.items.map((item) => (
+                      <li key={item.to}>
+                        <NavLink
+                          to={item.to}
+                          data-testid={item.testId}
+                          className={({ isActive }) =>
+                            cn(
+                              'flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors',
+                              'hover:bg-accent hover:text-foreground',
+                              isActive && 'bg-muted font-semibold text-foreground shadow-inner',
+                            )
+                          }
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{t(item.labelKey)}</span>
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
-          </section>
-        ))}
+            </div>
+          )}
+        </section>
       </nav>
 
       <div className="border-t border-border p-2.5 text-[10px] text-muted-foreground">

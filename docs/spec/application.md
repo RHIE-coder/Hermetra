@@ -9,20 +9,30 @@
 
 ### `app.shell.sidebar` — 사이드바
 
-폭 고정. 브랜드 마크 + 제품명 한 줄, 그룹 3개, 하단 푸터. 머리에 태그라인은 두지
+폭 고정. 브랜드 마크 + 제품명 한 줄, **접히는 카드 한 장**, 하단 푸터. 머리에 태그라인은 두지
 않는다 — 첫 실행에만 유효한 문구이고, 이 자리에서 실제로 바뀌는 정보(활성 워크스페이스)는
 상단바가 이미 들고 있다.
 
-| 그룹 | 액센트 | 항목 (라우트 / testid) |
-|---|---|---|
-| 웹 | `web` | 브라우저 `/web/remote` `nav-web-remote` · 스크립트 `/web/code` `nav-web-code` |
-| 모바일 | `mobile` | 디바이스 `/mobile/devices` `nav-mobile-devices` · 스크립트 `/mobile/code` `nav-mobile-code` · 인스펙터 `/mobile/inspector` `nav-mobile-inspector` |
-| 브리지 | `bridge` | 시나리오 `/bridge/scenarios` · 변수 `/bridge/variables` · 공유 버스 `/bridge/bus` · 이벤트 `/bridge/events` |
+웹·모바일·브리지는 **레거시 서랍**(`nav-legacy-toggle`) 안의 선반 셋이다. 카드 셋으로
+세우지 않는 이유는 그룹 제목이 이 레일에서 full-bleed 띠를 갖기 때문이다 — 띠 안의 띠는
+서로 경쟁하는 두 머리로 읽힌다. 한 단 내려간 선반은 얇은 muted 라벨이다.
+
+액센트 열은 두지 않는다 — 이 레일에는 영역 색이 없고(`app.theme`), 선택은 색이 아니라
+깊이로 읽힌다.
+
+| 선반 | 항목 (라우트 / testid) |
+|---|---|
+| 웹 | 브라우저 `/web/remote` `nav-web-remote` · 스크립트 `/web/code` `nav-web-code` |
+| 모바일 | 디바이스 `/mobile/devices` `nav-mobile-devices` · 스크립트 `/mobile/code` `nav-mobile-code` · 인스펙터 `/mobile/inspector` `nav-mobile-inspector` |
+| 브리지 | 시나리오 `/bridge/scenarios` · 변수 `/bridge/variables` · 공유 버스 `/bridge/bus` · 이벤트 `/bridge/events` |
 
 인수조건:
 
-- `AC-app.shell.sidebar-01` 항목 9개가 항상 렌더된다. 각 항목의 `data-testid` 는 위 표와
-  일치한다(e2e 가 이 ID로 화면을 찾는다).
+- `AC-app.shell.sidebar-01` 서랍이 열려 있으면 항목 9개가 렌더된다. 각 항목의
+  `data-testid` 는 위 표와 일치한다(e2e 와 표면 어댑터가 이 ID로 화면을 찾는다).
+- `AC-app.shell.sidebar-04` 서랍은 **열린 채로 뜬다.** 이 앱의 모든 화면이 그 안에 있어서,
+  접힌 채 시작하면 앱이 자기 자신을 가린다. 접는 것은 의도한 행동이고 앱이 그것을 기억한다.
+- `AC-app.shell.sidebar-05` 접으면 항목 9개가 DOM 에서 사라지고, 다시 누르면 돌아온다.
 - `AC-app.shell.sidebar-02` 항목을 누르면 그 라우트로 이동하고 해당 페이지의
   `page-*` 컨테이너가 보인다.
 - `AC-app.shell.sidebar-03` 현재 라우트의 항목은 활성 상태로 구분된다.

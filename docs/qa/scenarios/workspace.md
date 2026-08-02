@@ -27,13 +27,13 @@
 
 ## TestSuite: `app.shell` — 앱 셸
 
-구현: `src/renderer/components/layout/sidebar.test.tsx` (7) ·
+구현: `src/renderer/components/layout/sidebar.test.tsx` (12) ·
 `src/renderer/components/layout/topbar.test.tsx` (3) ·
-`tests/e2e/smoke.spec.ts` (3 — 항목 9개 존재 + 각 항목 이동 포함)
+`tests/e2e/smoke.spec.ts` (12 — 부팅 + 서랍 접힘/펼침 + 항목 9개 이동)
 
 | Case | 무엇 | 덮는 노드 | 계층 | 구현 |
 |---|---|---|---|---|
-| CASE-app-001 | 사이드바 그룹 3개와 항목 9개가 렌더된다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
+| CASE-app-001 | 서랍이 열린 채 뜨고 항목 9개가 렌더된다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
 | CASE-app-002 | 각 항목의 testid 가 정본 표와 일치한다 | `app.shell.sidebar` | E2E | `tests/e2e/smoke.spec.ts` |
 | CASE-app-003 | 현재 라우트의 항목이 활성으로 구분된다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
 | CASE-app-004 | 앱이 뜨고 제목·사이드바가 보인다 | `app.shell` | E2E | `tests/e2e/smoke.spec.ts` |
@@ -47,7 +47,9 @@
 | CASE-app-012 | 사이드바 어디에도 영역 액센트 색이 없다 | `app.theme` | UI | `sidebar.test.tsx` |
 | CASE-app-013 | 현재 항목은 카드 안으로 눌려 표시된다(색이 아니라 깊이) | `app.theme` | UI | `sidebar.test.tsx` |
 | CASE-app-014 | 나머지 항목은 눌리지 않은 채 평평하다 | `app.theme` | UI | `sidebar.test.tsx` |
-| CASE-app-015 | 내비 항목이 영역별 카드 3장으로 묶인다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
+| CASE-app-015 | 내비 항목이 접히는 카드 한 장으로 묶인다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
+| CASE-app-018 | 서랍을 접으면 항목 9개가 사라지고 다시 누르면 돌아온다 | `app.shell.sidebar` | UI·E2E | `sidebar.test.tsx` · `smoke.spec.ts` |
+| CASE-app-019 | 접힘 상태가 다음 실행까지 기억된다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
 | CASE-app-016 | 브리지 그룹은 "브리지"로 표시되고 "설정"으로 되돌아가지 않는다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
 | CASE-app-017 | 사이드바 머리는 제품명 한 줄이고 태그라인이 없다 | `app.shell.sidebar` | UI | `sidebar.test.tsx` |
 

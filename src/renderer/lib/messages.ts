@@ -42,6 +42,7 @@ const en = {
 
   // sidebar
   'sidebar.footer': 'v0.1.0',
+  'sidebar.group.legacy': 'Legacy',
   'sidebar.group.web': 'Web',
   'sidebar.group.mobile': 'Mobile',
   'sidebar.group.bridge': 'Bridge',
@@ -365,6 +366,7 @@ const ko: Record<keyof typeof en, string> = {
 
   // sidebar
   'sidebar.footer': 'v0.1.0',
+  'sidebar.group.legacy': '레거시',
   'sidebar.group.web': '웹',
   'sidebar.group.mobile': '모바일',
   'sidebar.group.bridge': '브리지',

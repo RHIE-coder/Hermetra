@@ -40,6 +40,15 @@ function navTargets() {
   return ids;
 }
 
+// 접힌 서랍 안의 화면도 판정 대상이다 — 행이 DOM 에 없으면 서랍을 열고 다시 본다.
+// 못 열면 그대로 둔다: 뒤따르는 click 이 실패하고 그 캡처가 cannot-verify 로 남는 것이
+// 맞다(못 본 것을 통과로 적지 않는다).
+async function revealNav(win, nav) {
+  if (await win.getByTestId(nav).isVisible().catch(() => false)) return;
+  const toggle = win.getByTestId('nav-legacy-toggle');
+  if (await toggle.isVisible().catch(() => false)) await toggle.click();
+}
+
 // 폼팩터: 좁음·중간·넓음 (계약 §4 — 픽셀 표면은 최소 3구성). 창 크기 단위는 화면점.
 const FORMS = {
   narrow: { label: 'narrow', w: 1024, h: 720 },
@@ -255,6 +264,7 @@ async function main() {
           let status = 'ok';
           let elements = [];
           try {
+            await revealNav(win, nav);
             await win.getByTestId(nav).click();
             await win.getByTestId(nav.replace(/^nav-/, 'page-')).waitFor({ state: 'visible', timeout: 15_000 });
             await win.waitForTimeout(350); // 전환 애니메이션

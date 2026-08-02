@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { I18nProvider } from '@/lib/i18n';
 import { Sidebar } from './sidebar';
@@ -22,6 +23,11 @@ import { Sidebar } from './sidebar';
  * Boundary: Sidebar imports `NavLink` from react-router-dom → wrap in
  * `MemoryRouter`. No store interaction; the component reads no store.
  */
+
+beforeEach(() => {
+  // The drawer remembers itself; a cleared store is what "first launch" means.
+  window.localStorage.clear();
+});
 
 const renderSidebar = (initialPath = '/') =>
   render(
@@ -105,15 +111,18 @@ describe('Sidebar — no accent, selection reads as depth', () => {
     expect(other.className).not.toContain('shadow-inner');
   });
 
-  it('groups the items into one card per section', () => {
+  /**
+   * One card now, not three: web / mobile / bridge are shelves inside a single
+   * collapsible drawer. A full-bleed band inside a full-bleed band would read as
+   * two competing headers, so the shelves are plain muted labels.
+   */
+  it('groups every item into one collapsible card', () => {
     const { container } = renderSidebar('/');
     const cards = container.querySelectorAll('nav > section');
 
-    expect(cards).toHaveLength(3);
-    for (const card of cards) {
-      expect(card.className).toContain('bg-card');
-      expect(card.className).toContain('shadow');
-    }
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.className).toContain('bg-card');
+    expect(cards[0]!.className).toContain('shadow');
   });
 });
 
@@ -142,5 +151,62 @@ describe('Sidebar — naming', () => {
 
     expect(head?.textContent?.trim()).toBe('Hermetra');
     expect(container.textContent).not.toMatch(/automation bridge|자동화 브리지/i);
+  });
+});
+
+/**
+ * The drawer starts open because every screen this app has lives inside it —
+ * opening collapsed would hide the app from itself. Folding it away is a
+ * deliberate act, and one the app does not undo behind your back.
+ */
+describe('Sidebar — the legacy drawer', () => {
+  it('starts open, so the nav is not empty on first launch', () => {
+    renderSidebar();
+
+    expect(screen.getByTestId('nav-legacy-toggle')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('nav-web-remote')).toBeInTheDocument();
+  });
+
+  it('folds every item away when closed', async () => {
+    renderSidebar();
+    await userEvent.click(screen.getByTestId('nav-legacy-toggle'));
+
+    for (const id of ['nav-web-remote', 'nav-mobile-devices', 'nav-bridge-bus']) {
+      expect(screen.queryByTestId(id), id).not.toBeInTheDocument();
+    }
+  });
+
+  it('remembers that it was folded away', async () => {
+    renderSidebar();
+    await userEvent.click(screen.getByTestId('nav-legacy-toggle'));
+
+    expect(window.localStorage.getItem('hermetra.sidebar.legacyOpen')).toBe('false');
+  });
+
+  it('opens folded when that is what was left last time', () => {
+    window.localStorage.setItem('hermetra.sidebar.legacyOpen', 'false');
+    renderSidebar();
+
+    expect(screen.getByTestId('nav-legacy-toggle')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('keeps every route reachable once open', () => {
+    renderSidebar();
+
+    const hrefs = [
+      ['nav-web-remote', '/web/remote'],
+      ['nav-web-code', '/web/code'],
+      ['nav-mobile-devices', '/mobile/devices'],
+      ['nav-mobile-code', '/mobile/code'],
+      ['nav-mobile-inspector', '/mobile/inspector'],
+      ['nav-bridge-scenarios', '/bridge/scenarios'],
+      ['nav-bridge-variables', '/bridge/variables'],
+      ['nav-bridge-bus', '/bridge/bus'],
+      ['nav-bridge-events', '/bridge/events'],
+    ] as const;
+
+    for (const [testId, href] of hrefs) {
+      expect((screen.getByTestId(testId) as HTMLAnchorElement).getAttribute('href')).toBe(href);
+    }
   });
 });
