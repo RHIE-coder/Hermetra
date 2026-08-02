@@ -28,6 +28,7 @@ import type {
   InspectorElement,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
+import type { FeedbackRequest, FeedbackSaveResult } from '../dev-feedback';
 import type {
   BridgeEvent,
   BusVar,
@@ -146,6 +147,10 @@ export const CHANNELS = {
   // Browser binaries
   BROWSER_INSTALL_STATE: 'browser:install:state',
   BROWSER_INSTALL_RUN: 'browser:install:run',
+
+  // Dev-only screen feedback. Registered only in an unpackaged app — the
+  // handler writes into the repo and has no business in a shipped build.
+  DEV_FEEDBACK_SAVE: 'dev:feedback:save',
 
   // Subscriptions (main → renderer)
   EVT_BRIDGE_EVENT: 'evt:bridge:event',
@@ -267,6 +272,8 @@ export interface IpcContract {
 
   [CHANNELS.BROWSER_INSTALL_STATE]: { input: void; output: BrowserInstallState };
   [CHANNELS.BROWSER_INSTALL_RUN]: { input: void; output: { started: boolean } };
+
+  [CHANNELS.DEV_FEEDBACK_SAVE]: { input: FeedbackRequest; output: FeedbackSaveResult };
 }
 
 export type RequestOf<C extends ChannelName> = IpcContract[C]['input'];

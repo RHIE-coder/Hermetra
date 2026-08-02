@@ -58,6 +58,10 @@ UI 라벨은 ID가 아니다 — 라벨은 `src/renderer/lib/messages.ts` 의 en
 | bridge | `bridge.bus` | `/bridge/bus` | `nav-bridge-bus` | `bridge/bus.md` |
 | bridge | `bridge.events` | `/bridge/events` | `nav-bridge-events` | `bridge/events.md` |
 | workspace | `workspace.switcher` | 상단바 | — | `workspace/switcher.md` |
+| tools | `tools.dev-feedback` | 없음(모든 화면 위) | — | `tools/dev-feedback.md` |
+
+> `tools` 는 제품 Service 가 아니라 **개발 전용 도구**의 자리다. 패키징된 앱에는 존재하지
+> 않으므로 라우트도 사이드바 항목도 없고, UI 게이트(`surface-verify`)의 판정 대상도 아니다.
 
 Service 규칙(그 서비스 전체에 걸리는 정책·상태 소유)은 각 폴더의 `README.md` 에 있다.
 

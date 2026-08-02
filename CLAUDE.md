@@ -205,6 +205,35 @@ If we ever move to SQLite or similar, the **DB Schema** test layer above is wher
 
 ---
 
+## 5.5 Screen feedback from the user (`.harness/feedback/`)
+
+In `npm run dev` the user can pull the handle on the right edge (or press
+`⌘⇧F` / `Ctrl⇧F`), mark what is wrong on the screen and send it. It lands in
+`.harness/feedback/<date-time-screen>/`. **When you get a request along the
+lines of "look at my feedback", read the newest folder there first.**
+
+- `note.md` — the note, the kind of mark, the element it pointed at and its
+  React component chain. Reading this one file tells you what to fix and where.
+- `shot.png` — the window at that moment, with the marks drawn on it.
+- `note.json` — the same thing with coordinates.
+- `sketch-N.png` — a drawing attached to mark N, when there is one. It is the
+  user drawing "this is how it should look", so it can carry the request more
+  precisely than the written note — always look at it when it exists.
+
+Marks come in two kinds and `note.md` says which:
+
+- **pin** — a **point**, not an area. Do not read the badge box as "this much
+  of the screen is the problem".
+- **shape** — the area that was drawn around.
+
+The folders are gitignored. Delete one once you have acted on it, after
+confirming with the user. The tool's own spec is
+`docs/spec/tools/dev-feedback.md`; it is dev-only and absent from a packaged
+app, and it is the one place raw hex is allowed in the renderer (those values
+are painted into an SVG and a PNG, not into CSS — see the spec).
+
+---
+
 ## 6. House rules (small but matters)
 
 - **No emojis** in code, commit messages, or UI strings unless the user explicitly asks.

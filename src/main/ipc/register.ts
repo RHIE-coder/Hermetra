@@ -20,6 +20,7 @@ import { myDevicesService } from '../services/myDevices';
 import { connectionsService } from '../services/connections';
 import { appleCertsService } from '../services/appleCerts';
 import { BrowserInstaller } from '../services/browserInstall';
+import { saveFeedback } from '../services/devFeedback';
 import type { Workspace } from '@shared/types/workspace';
 
 export function registerIpc(getWindow: () => BrowserWindow | null) {
@@ -300,4 +301,24 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   /* ── Browser binaries ────────────────────────────────────────────── */
   ipcMain.handle(CHANNELS.BROWSER_INSTALL_STATE, () => installer.state());
   ipcMain.handle(CHANNELS.BROWSER_INSTALL_RUN, () => ({ started: installer.install() }));
+
+  /* ── Dev-only screen feedback ────────────────────────────────────── */
+  // Absent from a packaged app entirely: it writes into the repo with no
+  // guard, and the overlay that calls it is compiled out of a prod renderer.
+  if (!app.isPackaged) {
+    ipcMain.handle(CHANNELS.DEV_FEEDBACK_SAVE, (_e, raw) =>
+      saveFeedback(raw, {
+        // The window screenshots itself. The renderer hides its own toolbars
+        // before invoking and leaves the marks up, so what lands in shot.png
+        // is pixel-for-pixel what the user was looking at — no DOM cloning,
+        // no scroll or sticky corrections to get wrong.
+        capture: async () => {
+          const win = getWindow();
+          if (!win || win.isDestroyed()) return null;
+          const image = await win.webContents.capturePage();
+          return image.isEmpty() ? null : image.toDataURL();
+        },
+      }),
+    );
+  }
 }

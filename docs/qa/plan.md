@@ -61,5 +61,6 @@ Hermetra 는 외부 도구(Chromium · Appium · 실기기)를 몰고 다니는 
 | 브리지 | `scenarios/bridge.md` | `bridge` |
 | 워크스페이스·셸 | `scenarios/workspace.md` | `workspace` · `app` |
 | 교차 흐름 (골든 패스) | `scenarios/cross-side.md` | 전 Service |
+| 화면 피드백 도구 (개발 전용) | `scenarios/tools-dev-feedback.md` | `tools` |
 
 의도적으로 안 덮는 것과 아직 안 쓴 것: `coverage-gaps.md`.

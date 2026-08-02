@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import { ThemeProvider } from 'next-themes';
 import { App } from './App';
+import { DevFeedback } from './components/dev-feedback';
 import { I18nProvider } from './lib/i18n';
 import './styles/global.css';
 
@@ -15,6 +16,8 @@ createRoot(root).render(
       <I18nProvider>
         <HashRouter>
           <App />
+          {/* Dev-only screen feedback. Compiled out of a production build. */}
+          <DevFeedback />
         </HashRouter>
       </I18nProvider>
     </ThemeProvider>
