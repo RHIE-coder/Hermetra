@@ -100,16 +100,35 @@ Electron 메인 ──spawn──> node launcher.mjs ──> Camoufox (Firefox)
 - `AC-pipeline.sidecar-08` 앱이 뜰 때 자동으로 시작하지 **않는다.** 그 화면을 안 여는
   사용자에게 스텔스 브라우저는 순수 비용이다.
 
-### 아직 없는 것 — 배포
+### 배포 — Node 를 함께 싣는다
 
-**Node 런타임을 번들해야 한다.** `process.execPath` 는 Electron 이라 못 쓴다(위 표). 지금
-`resolveNodeRuntime()` 은 `HERMETRA_NODE` → 번들 위치(`resourcesPath/node`) → PATH 순으로
-찾고, 없으면 **null 을 돌려주고 그 사실을 화면에 보고한다** — 개발 기계에서는 PATH 의 node 로
-돌지만, 패키징된 앱에는 그것이 없다.
+`process.execPath` 는 Electron 이라 못 쓴다(위 표). 그래서 **Node 바이너리가 앱과 함께
+실린다.** `scripts/bundle-node.mjs` 가 공식 배포본을 받아 `resources/node/` 에 놓고,
+electron-builder 의 `extraResources` 가 그것을 `Contents/Resources/node/` 로 싣는다.
 
-이 프로젝트에는 아직 패키징 설정 자체가 없다(`electron-builder` 없음, `dist` 스크립트 없음).
-Node 번들은 그 설정을 만들 때 함께 정한다. Camoufox 바이너리(~150MB)는 이 앱이 Chromium 을
-받는 것과 같은 방식으로 첫 실행에 받는다.
+버전은 **고정**한다(`v22.14.0`). "가장 새것"으로 두면 같은 커밋이 빌드할 때마다 다른 런타임을
+싣고, 그 차이가 어디에도 안 남는다.
+
+`resolveNodeRuntime()` 의 순서는 `HERMETRA_NODE` → 번들(`resourcesPath/node`) → PATH 다.
+패키징된 앱이 사용자 기계의 아무 node 보다 **자기 것을 먼저 쓰게** 하는 순서이고, 셋 다 없으면
+null 을 돌려주고 그 사실을 보고한다(앱이 죽지 않는다).
+
+**asar 를 켜지 않는다.** 런처는 진짜 Node 로 도는데 Node 는 `app.asar` 를 아예 못 읽는다 —
+`.node` 만 unpack 해서 될 일이 아니라 `camoufox-js` 의 JS 트리 전체가 밖에 있어야 한다. 전이
+의존성을 `asarUnpack` 글롭으로 열거하는 것은 의존성이 하나 늘 때마다 조용히 깨진다.
+
+검증(2026-08-10, darwin-arm64): `npm run pack` 산출물 안에서
+`Contents/Resources/node/node` 가 `app/out/main/launcher.mjs` 를 돌려 Camoufox 가 떴다.
+앱 크기 485MB(Electron + Node 104MB + 의존성).
+
+| 아직 확인 못 한 것 | 무엇 |
+|---|---|
+| win32 · linux 패키징 | 스크립트는 `--platform`/`--arch` 를 받고 URL 규칙도 같지만 **darwin-arm64 만 실제로 돌려 봤다** |
+| 코드 서명 · 공증 | `identity: null` 로 꺼 뒀다. 배포용 dmg 를 만들 때 함께 정한다 |
+| 앱 아이콘 | 기본 Electron 아이콘이 쓰인다 |
+
+Camoufox 바이너리(~150MB)는 여기 안 들어간다 — 이 앱이 Chromium 을 받는 것과 같은 방식으로
+첫 실행에 받는다.
 
 ## Service 규칙
 

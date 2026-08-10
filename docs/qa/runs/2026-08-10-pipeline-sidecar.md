@@ -72,12 +72,35 @@ Electron 메인 ──spawn──> node launcher.mjs ──> Camoufox
 
 새 테스트 25개: `sidecar-supervisor.test.ts` 13(테스트 먼저, red 확인) · `sidecar.test.ts` 12.
 
-### 남긴 것 — 배포
+## 회차 2 — 패키징 (같은 날, 이어서)
 
-**Node 런타임 번들이 아직 없다.** `resolveNodeRuntime()` 이 `HERMETRA_NODE` → 번들 위치 →
-PATH 순으로 찾고 없으면 null 을 돌려주며 그 사실을 보고한다. 개발 기계는 PATH 의 node 로
-돌지만 패키징된 앱에는 없다. 이 프로젝트에는 패키징 설정 자체가 없어서(`electron-builder`
-없음) 그 설정을 만들 때 함께 정한다.
+- 계기: 유저 요청 — "어차피 해야 한다며. 까먹기 전에 해 두자."
+- 범위: `electron-builder.yml` · `scripts/bundle-node.mjs` · npm 스크립트 4 ·
+  eslint ignore/스코프 · `.gitignore` · 정본 1.
+
+이 프로젝트에는 패키징 설정이 **아예 없었다**(build 섹션 없음, dist 스크립트 없음). 사이드카가
+Node 를 요구하니 더 미룰 수 없어 여기서 세웠다.
+
+| 결정 | 왜 |
+|---|---|
+| Node 를 함께 싣는다 | `process.execPath` 는 Electron 이라 사이드카를 못 돌린다 |
+| 버전 고정 `v22.14.0` | "가장 새것"이면 같은 커밋이 매번 다른 런타임을 싣고 그 차이가 안 남는다 |
+| 공식 배포본을 **받는다** (개발 기계 것 복사 아님) | mac 에서 win 런타임을 실을 수 있고, 결과가 "무엇이 깔려 있었나"에 안 달린다 |
+| `asar: false` | 런처가 진짜 Node 라 `app.asar` 를 못 읽는다. `.node` 만 unpack 으론 부족하고 camoufox-js JS 트리 전체가 밖이어야 한다. 전이 의존성을 글롭으로 열거하면 의존성 하나 늘 때마다 조용히 깨진다 |
+
+**검증 — 패키징된 앱 안에서 실제로 돌렸다.** `Contents/Resources/node/node` 가
+`app/out/main/launcher.mjs` 를 돌려 Camoufox 가 떴고 SIGTERM 에 정상 종료했다. 앱 485MB.
+
+lint 가 `release/` 산출물까지 훑어 1192건을 냈다 — ignore 에 `release/`·`resources/`·`.cache/`
+를 넣고 `scripts/**/*.mjs` 에 Node 전역을 줬다.
+
+### 남긴 것
+
+| 확인 못 한 것 | 무엇 |
+|---|---|
+| win32 · linux | 스크립트는 `--platform`/`--arch` 를 받지만 **darwin-arm64 만 실제로 돌려 봤다** |
+| 서명 · 공증 | `identity: null`. 배포용 dmg 를 만들 때 |
+| 앱 아이콘 | 기본 Electron 아이콘 |
 
 UI 는 안 붙였다 — 채널은 있고 화면은 없다. 소스 화면을 설계할 때 사이드카 상태 자리를 함께
 잡는다.

@@ -11,6 +11,10 @@ export default tseslint.config(
     ignores: [
       'out/**',
       'dist/**',
+      // 패키징 산출물과 함께 실리는 런타임 — 우리가 쓴 코드가 아니다.
+      'release/**',
+      'resources/**',
+      '.cache/**',
       'coverage/**',
       'node_modules/**',
       'playwright-report/**',
@@ -67,7 +71,7 @@ export default tseslint.config(
 
   // Harness and build scripts: plain Node ESM, no TypeScript project.
   {
-    files: ['*.config.{js,ts}', '.claude/**/*.mjs'],
+    files: ['*.config.{js,ts}', '.claude/**/*.mjs', 'scripts/**/*.mjs'],
     languageOptions: { globals: globals.node },
   },
 );

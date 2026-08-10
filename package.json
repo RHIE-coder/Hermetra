@@ -7,6 +7,10 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "bundle:node": "node scripts/bundle-node.mjs",
+    "prepack": "npm run build && npm run bundle:node",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -39,6 +43,7 @@
     "@vitest/coverage-v8": "^4.1.7",
     "autoprefixer": "^10.4.20",
     "electron": "^33.2.0",
+    "electron-builder": "^26.0.22",
     "electron-vite": "^5.0.0",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",

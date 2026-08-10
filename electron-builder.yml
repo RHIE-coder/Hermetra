@@ -1,0 +1,44 @@
+appId: dev.hermetra.app
+productName: Hermetra
+copyright: Hermetra
+
+directories:
+  output: release
+  buildResources: build
+
+# asar 를 켜지 않는다. 수집 사이드카의 런처는 **진짜 Node** 로 도는데, Node 는 app.asar 를
+# 아예 못 읽는다 — `.node` 만 unpack 해서 될 일이 아니라 camoufox-js 의 JS 트리 전체가 밖에
+# 있어야 한다. 전이 의존성을 asarUnpack 글롭으로 열거하는 것은 의존성이 하나 늘 때마다
+# 조용히 깨지는 방식이라, 앱 전체를 평문 파일로 둔다.
+# 배경: docs/spec/pipeline/README.md — `pipeline.sidecar`.
+asar: false
+
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+  - '!node_modules/**/{test,tests,__tests__,doc,docs,example,examples}/**'
+  - '!node_modules/**/*.{md,markdown}'
+
+# 앱 코드가 아니라 **함께 실려야 하는 런타임**. resources/node/ 는 scripts/bundle-node.mjs 가
+# 채우고, main 의 resolveNodeRuntime() 이 process.resourcesPath 아래에서 이 경로를 찾는다.
+extraResources:
+  - from: resources/node
+    to: node
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dir
+  # 서명·공증은 아직 붙이지 않았다. 확인하지 못한 경로를 있는 것처럼 두지 않는다 —
+  # 배포용 dmg 를 만들 때 identity 와 notarize 를 함께 정한다.
+  identity: null
+
+win:
+  target:
+    - dir
+
+linux:
+  category: Development
+  target:
+    - dir

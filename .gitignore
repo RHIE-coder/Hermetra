@@ -158,3 +158,8 @@ vite.config.ts.timestamp-*
 .harness/steward/shots/
 .harness/steward/artifacts/*/shots/
 .harness/steward/artifacts/*/surface-verify.json
+
+# packaging
+release/
+resources/node/
+.cache/
