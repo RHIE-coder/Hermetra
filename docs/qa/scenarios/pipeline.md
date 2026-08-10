@@ -75,6 +75,38 @@
 | CASE-pipeline-083 | 런타임이 없으면 null 이고 throw 하지 않는다 | `pipeline.sidecar` | API | `tests/api/sidecar.test.ts` |
 | CASE-pipeline-084 | 채널 문자열이 유일하다 | `app.ipc` | API | `tests/api/sidecar.test.ts` |
 
+## TestSuite: `pipeline.automatch` — 재배치
+
+순수 채점·판정(`automatch.ts`)과 지문 뜨기(`snapshot.ts`)를 가른다. 지문 쪽은 손으로 만든
+객체가 아니라 **실제 DOM**(happy-dom)에 대고 돈다 — 마크업에서 도는 게 목적인데 손으로 만든
+스냅샷은 코드가 하는 대로 조용히 동의해 준다.
+
+구현: `tests/unit/automatch.test.ts` (20) · `tests/unit/snapshot.test.ts` (11)
+
+| Case | 무엇 | 덮는 노드 | 계층 | 구현 |
+|---|---|---|---|---|
+| CASE-pipeline-100 | 같은 스냅샷은 정확히 1점이다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-101 | 점수가 대칭이다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-102 | 점수가 0..1 을 벗어나지 않는다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-103 | 클래스가 갈려도 id·텍스트가 남으면 살아남는다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-104 | 트리에서 더 깊어져도 살아남는다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-105 | id 가 클래스보다 무겁다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-106 | 강한 신호 하나가 나머지 전부를 이기지 못한다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-107 | 모양만 같은 다른 행을 같은 요소로 보지 않는다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-108 | 셀렉터가 아직 맞으면 exact, 재배치 없음 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-109 | 확실한 1등이면 재배치하고 점수를 보고한다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-110 | 2위와 구분이 안 되면 고르지 않는다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-111 | 기준 미달이면 사람에게 넘긴다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-112 | 후보가 없어도 던지지 않고 lost 로 보고한다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-113 | 가중치 합이 1이다 | `pipeline.automatch` | 단위 | `automatch.test.ts` |
+| CASE-pipeline-120 | 태그·속성·자기 텍스트·조상을 기록한다 | `pipeline.automatch` | 단위 | `snapshot.test.ts` |
+| CASE-pipeline-121 | 자손의 텍스트를 자기 것으로 신고하지 않는다 | `pipeline.automatch` | 단위 | `snapshot.test.ts` |
+| CASE-pipeline-122 | 같은 태그 형제 중에서만 순번을 센다 | `pipeline.automatch` | 단위 | `snapshot.test.ts` |
+| CASE-pipeline-123 | style·프레임워크 부기 속성을 버린다 | `pipeline.automatch` | 단위 | `snapshot.test.ts` |
+| CASE-pipeline-124 | 생성된 클래스 토큰만 버리고 쓴 것은 남긴다 | `pipeline.automatch` | 단위 | `snapshot.test.ts` |
+| CASE-pipeline-125 | 해시·중첩이 바뀐 배포 뒤에도 요소를 되찾는다 | `pipeline.automatch` | 단위 | `snapshot.test.ts` |
+| CASE-pipeline-126 | 똑같은 행이 둘이면 추측하지 않는다 | `pipeline.automatch` | 단위 | `snapshot.test.ts` |
+
 ## 아직 없는 것
 
 **화면 여섯에는 여전히 동작이 없다.** 사이드카가 생기며 단위·API 계층이 채워졌지만 그것은
