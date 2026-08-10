@@ -21,10 +21,6 @@
 | 연결 설정 (Connection) | 워크스페이스마다 두는 기기·서버 접속 설정. 옛 이름 "Capability" 를 대체했다 | `Connection` |
 | 인스펙터 (Inspector) | 모바일 화면 스크린샷과 요소 트리를 함께 보는 화면 | `mobile/inspector` |
 | 변수 프로필 (Variable profile) | 공유(Shared)/개인(Private)으로 갈라 저장하는 변수 묶음. 개인 값은 저장소에 올리지 않는다 | `variables/*.json` |
-| 소스 (Source) | 파이프라인이 데이터를 가져오는 바깥의 한 곳. 워크스페이스마다 목록을 둔다 | `Source` (`store.json` 의 `sources[]`) |
-| 소스 종류 (Source kind) | 소스가 API 엔드포인트인가 크롤링 대상 사이트인가. 종류마다 필드가 다르다 | `kind: 'api' \| 'site'` |
-| 변수 참조 (Variable reference) | 소스 레코드가 비밀값 자체가 아니라 변수 **키 이름**만 들고 있는 것. 값은 변수의 private 쪽이 든다 | `tokenVar` 등 `*Var` 필드 |
-| 연결 확인 (Source test) | 소스가 실제로 닿는지 사람이 눌러 보는 것. `api` 는 HTTP 요청 한 번, `site` 는 브라우저로 실제로 연다 | `SourceTestResult` |
 | IPC 계약 | 렌더러↔메인 호출의 유일한 정본. 채널 문자열과 입출력 타입을 한곳에 선언한다 | `src/shared/ipc/channels.ts` |
 
 ## 하네스 (steward)
