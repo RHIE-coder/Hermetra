@@ -99,8 +99,10 @@ try {
 
   if (nav) {
     // 접힌 서랍 안의 화면이면 먼저 연다 — 행이 DOM 에 없으면 클릭할 수 없다.
+    // 서랍은 둘이고 따로 접힌다: 파이프라인 행은 파이프라인 서랍이 연다.
     if (!(await win.getByTestId(nav).isVisible().catch(() => false))) {
-      const toggle = win.getByTestId('nav-legacy-toggle');
+      const toggleId = nav.startsWith('nav-pipeline-') ? 'nav-pipeline-toggle' : 'nav-legacy-toggle';
+      const toggle = win.getByTestId(toggleId);
       if (await toggle.isVisible().catch(() => false)) await toggle.click();
     }
     // nav-<x> 를 누르면 page-<x> 가 떠야 한다 — 그 렌더까지 기다린 뒤 캡처한다(준비 전 캡처 금지).

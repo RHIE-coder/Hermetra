@@ -38,10 +38,20 @@ const renderSidebar = (initialPath = '/') =>
     </I18nProvider>,
   );
 
+/**
+ * The legacy drawer starts folded, so its rows are not in the DOM. Assertions
+ * *about* those rows seed the drawer's memory instead of clicking it open —
+ * the fold behaviour has its own describe and does not need re-testing here.
+ */
+const withLegacyOpen = (initialPath = '/') => {
+  window.localStorage.setItem('hermetra.sidebar.legacyOpen', 'true');
+  return renderSidebar(initialPath);
+};
+
 describe('Sidebar — mobile-inspector nav item', () => {
   // AC1: the new nav-mobile-inspector item is present.
   it('AC1: renders a nav-mobile-inspector entry pointing to /mobile/inspector', () => {
-    renderSidebar();
+    withLegacyOpen();
 
     const item = screen.getByTestId('nav-mobile-inspector');
     expect(item).toBeInTheDocument();
@@ -51,7 +61,7 @@ describe('Sidebar — mobile-inspector nav item', () => {
 
   // AC1: the existing Mobile group items are unchanged (no churn).
   it('AC1: existing Mobile group items (devices / code) still render', () => {
-    renderSidebar();
+    withLegacyOpen();
     expect(screen.getByTestId('nav-mobile-devices')).toBeInTheDocument();
     expect(screen.getByTestId('nav-mobile-code')).toBeInTheDocument();
   });
@@ -60,7 +70,7 @@ describe('Sidebar — mobile-inspector nav item', () => {
   // We pin this by checking it appears after nav-mobile-code in DOM order
   // (the spec says "Mobile 그룹 3번째 항목").
   it('AC1: nav-mobile-inspector appears as the 3rd item in the Mobile group (after devices, code)', () => {
-    renderSidebar();
+    withLegacyOpen();
     const devices = screen.getByTestId('nav-mobile-devices');
     const code = screen.getByTestId('nav-mobile-code');
     const inspector = screen.getByTestId('nav-mobile-inspector');
@@ -83,7 +93,7 @@ const ACCENT_CLASS = /\b(?:bg|text|border|ring|from|via|to)-(?:web|mobile|bridge
 
 describe('Sidebar — no accent, selection reads as depth', () => {
   it('renders no module accent class anywhere in the rail', () => {
-    const { container } = renderSidebar('/web/remote');
+    const { container } = withLegacyOpen('/web/remote');
 
     const offenders = [...container.querySelectorAll<HTMLElement>('[class]')]
       .map((el) => el.className)
@@ -93,7 +103,7 @@ describe('Sidebar — no accent, selection reads as depth', () => {
   });
 
   it('marks the current route by pressing its row in, not by tinting it', () => {
-    renderSidebar('/web/remote');
+    withLegacyOpen('/web/remote');
     const active = screen.getByTestId('nav-web-remote');
 
     expect(active.className).toContain('bg-muted');
@@ -104,7 +114,7 @@ describe('Sidebar — no accent, selection reads as depth', () => {
   });
 
   it('leaves every other row flush', () => {
-    renderSidebar('/web/remote');
+    withLegacyOpen('/web/remote');
     const other = screen.getByTestId('nav-bridge-bus');
 
     expect(other.className).not.toContain('bg-muted');
@@ -112,17 +122,20 @@ describe('Sidebar — no accent, selection reads as depth', () => {
   });
 
   /**
-   * One card now, not three: web / mobile / bridge are shelves inside a single
-   * collapsible drawer. A full-bleed band inside a full-bleed band would read as
-   * two competing headers, so the shelves are plain muted labels.
+   * One card per product area, not one per group: web / mobile / bridge are
+   * shelves inside a single Legacy drawer, and Data Pipeline is the second
+   * drawer. A full-bleed band inside a full-bleed band would read as two
+   * competing headers, so the shelves are plain muted labels.
    */
-  it('groups every item into one collapsible card', () => {
+  it('groups every item into a collapsible card, one per drawer', () => {
     const { container } = renderSidebar('/');
     const cards = container.querySelectorAll('nav > section');
 
-    expect(cards).toHaveLength(1);
-    expect(cards[0]!.className).toContain('bg-card');
-    expect(cards[0]!.className).toContain('shadow');
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      expect(card.className).toContain('bg-card');
+      expect(card.className).toContain('shadow');
+    }
   });
 });
 
@@ -139,7 +152,7 @@ describe('Sidebar — no accent, selection reads as depth', () => {
  */
 describe('Sidebar — naming', () => {
   it('labels the bridge group "Bridge", never "Settings"', () => {
-    const { container } = renderSidebar('/bridge/bus');
+    const { container } = withLegacyOpen('/bridge/bus');
 
     expect(container.textContent).not.toMatch(/settings|설정/i);
     expect(container.textContent).toMatch(/bridge|브리지/i);
@@ -155,42 +168,58 @@ describe('Sidebar — naming', () => {
 });
 
 /**
- * The drawer starts open because every screen this app has lives inside it —
- * opening collapsed would hide the app from itself. Folding it away is a
- * deliberate act, and one the app does not undo behind your back.
+ * The legacy drawer starts **folded**, and remembers.
+ *
+ * It used to start open, because every screen this app had lived inside it and
+ * starting collapsed would have hidden the app from itself. Data Pipeline made
+ * that reasoning obsolete twice over: the rail now has a group that leads, and
+ * fifteen rows with both drawers open overflow a 1024x720 rail (the last row is
+ * clipped to a sliver). The group named "Legacy" is the one that gives way.
  */
 describe('Sidebar — the legacy drawer', () => {
-  it('starts open, so the nav is not empty on first launch', () => {
+  it('starts folded, and the nav is still not empty', () => {
+    renderSidebar();
+
+    expect(screen.getByTestId('nav-legacy-toggle')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('nav-web-remote')).not.toBeInTheDocument();
+    expect(screen.getByTestId('nav-pipeline-jobs')).toBeInTheDocument();
+  });
+
+  it('unfolds every item when opened', async () => {
+    renderSidebar();
+    await userEvent.click(screen.getByTestId('nav-legacy-toggle'));
+
+    for (const id of ['nav-web-remote', 'nav-mobile-devices', 'nav-bridge-bus']) {
+      expect(screen.getByTestId(id), id).toBeInTheDocument();
+    }
+  });
+
+  it('remembers that it was opened', async () => {
+    renderSidebar();
+    await userEvent.click(screen.getByTestId('nav-legacy-toggle'));
+
+    expect(window.localStorage.getItem('hermetra.sidebar.legacyOpen')).toBe('true');
+  });
+
+  it('opens unfolded when that is what was left last time', () => {
+    window.localStorage.setItem('hermetra.sidebar.legacyOpen', 'true');
     renderSidebar();
 
     expect(screen.getByTestId('nav-legacy-toggle')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('nav-web-remote')).toBeInTheDocument();
   });
 
-  it('folds every item away when closed', async () => {
+  it('folds only itself away — the Data Pipeline drawer is untouched', async () => {
+    window.localStorage.setItem('hermetra.sidebar.legacyOpen', 'true');
     renderSidebar();
     await userEvent.click(screen.getByTestId('nav-legacy-toggle'));
 
-    for (const id of ['nav-web-remote', 'nav-mobile-devices', 'nav-bridge-bus']) {
-      expect(screen.queryByTestId(id), id).not.toBeInTheDocument();
-    }
-  });
-
-  it('remembers that it was folded away', async () => {
-    renderSidebar();
-    await userEvent.click(screen.getByTestId('nav-legacy-toggle'));
-
-    expect(window.localStorage.getItem('hermetra.sidebar.legacyOpen')).toBe('false');
-  });
-
-  it('opens folded when that is what was left last time', () => {
-    window.localStorage.setItem('hermetra.sidebar.legacyOpen', 'false');
-    renderSidebar();
-
-    expect(screen.getByTestId('nav-legacy-toggle')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('nav-web-remote')).not.toBeInTheDocument();
+    expect(screen.getByTestId('nav-pipeline-jobs')).toBeInTheDocument();
   });
 
   it('keeps every route reachable once open', () => {
+    window.localStorage.setItem('hermetra.sidebar.legacyOpen', 'true');
     renderSidebar();
 
     const hrefs = [
@@ -208,5 +237,105 @@ describe('Sidebar — the legacy drawer', () => {
     for (const [testId, href] of hrefs) {
       expect((screen.getByTestId(testId) as HTMLAnchorElement).getAttribute('href')).toBe(href);
     }
+  });
+});
+
+/**
+ * Spec acceptance criteria covered here (data-pipeline-nav):
+ *
+ *   AC-app.shell.sidebar-06 — a Data Pipeline drawer holds six stage screens,
+ *   in pipeline order, above the Legacy drawer.
+ *
+ * The order is load-bearing: the rail is the only place the pipeline's shape is
+ * stated, so a shuffled list would quietly restate the product. Pinned by
+ * document position rather than by index so inserting a stage later fails loudly.
+ */
+describe('Sidebar — the Data Pipeline drawer', () => {
+  const PIPELINE = [
+    ['nav-pipeline-jobs', '/pipeline/jobs'],
+    ['nav-pipeline-sources', '/pipeline/sources'],
+    ['nav-pipeline-ingestion', '/pipeline/ingestion'],
+    ['nav-pipeline-processing', '/pipeline/processing'],
+    ['nav-pipeline-storage', '/pipeline/storage'],
+    ['nav-pipeline-insights', '/pipeline/insights'],
+  ] as const;
+
+  it('renders all six stage screens with their routes', () => {
+    renderSidebar();
+
+    for (const [testId, href] of PIPELINE) {
+      const row = screen.getByTestId(testId) as HTMLAnchorElement;
+      expect(row, testId).toBeInTheDocument();
+      expect(row.getAttribute('href'), testId).toBe(href);
+    }
+  });
+
+  it('keeps them in pipeline order', () => {
+    renderSidebar();
+
+    const rows = PIPELINE.map(([testId]) => screen.getByTestId(testId));
+    for (let i = 0; i < rows.length - 1; i += 1) {
+      expect(
+        rows[i]!.compareDocumentPosition(rows[i + 1]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+        `${PIPELINE[i]![0]} should precede ${PIPELINE[i + 1]![0]}`,
+      ).toBeTruthy();
+    }
+  });
+
+  it('sits above the Legacy drawer', () => {
+    renderSidebar();
+    const pipeline = screen.getByTestId('nav-pipeline-toggle');
+    const legacy = screen.getByTestId('nav-legacy-toggle');
+
+    expect(
+      pipeline.compareDocumentPosition(legacy) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('starts open and folds away on its own key', async () => {
+    renderSidebar();
+    expect(screen.getByTestId('nav-pipeline-toggle')).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(screen.getByTestId('nav-pipeline-toggle'));
+
+    expect(screen.queryByTestId('nav-pipeline-jobs')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('hermetra.sidebar.pipelineOpen')).toBe('false');
+    // The Legacy drawer keeps its own memory — folding one does not write the other.
+    expect(window.localStorage.getItem('hermetra.sidebar.legacyOpen')).toBeNull();
+  });
+
+  it('folds only itself away — an open Legacy drawer stays open', async () => {
+    window.localStorage.setItem('hermetra.sidebar.legacyOpen', 'true');
+    renderSidebar();
+    await userEvent.click(screen.getByTestId('nav-pipeline-toggle'));
+
+    expect(screen.queryByTestId('nav-pipeline-jobs')).not.toBeInTheDocument();
+    expect(screen.getByTestId('nav-web-remote')).toBeInTheDocument();
+  });
+
+  it('opens folded when that is what was left last time', () => {
+    window.localStorage.setItem('hermetra.sidebar.pipelineOpen', 'false');
+    renderSidebar();
+
+    expect(screen.getByTestId('nav-pipeline-toggle')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('carries no module accent either', () => {
+    const { container } = renderSidebar('/pipeline/jobs');
+
+    const offenders = [...container.querySelectorAll<HTMLElement>('[class]')]
+      .map((el) => el.className)
+      .filter((c) => typeof c === 'string' && ACCENT_CLASS.test(c));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('marks the current pipeline route by pressing its row in', () => {
+    renderSidebar('/pipeline/storage');
+    const active = screen.getByTestId('nav-pipeline-storage');
+
+    expect(active.className).toContain('bg-muted');
+    expect(active.className).toContain('shadow-inner');
+    expect(screen.getByTestId('nav-pipeline-jobs').className).not.toContain('shadow-inner');
   });
 });

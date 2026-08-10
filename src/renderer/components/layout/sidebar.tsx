@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  Antenna,
+  ArrowDownToLine,
+  BarChart3,
   ChevronRight,
+  Cog,
+  Database,
   Globe,
+  ListChecks,
   Smartphone,
   Workflow,
   Activity,
@@ -23,12 +29,27 @@ interface NavItem {
   testId: string;
 }
 
-interface NavGroup {
-  titleKey: MessageKey;
+/** A run of items under an optional muted label, one level inside a drawer. */
+interface NavShelf {
+  titleKey?: MessageKey;
   items: NavItem[];
 }
 
-const groups: NavGroup[] = [
+/** The Data Pipeline drawer: six stage screens, no shelves — the order is the pipeline. */
+const pipelineShelves: NavShelf[] = [
+  {
+    items: [
+      { to: '/pipeline/jobs', labelKey: 'sidebar.pipeline.jobs', icon: ListChecks, testId: 'nav-pipeline-jobs' },
+      { to: '/pipeline/sources', labelKey: 'sidebar.pipeline.sources', icon: Antenna, testId: 'nav-pipeline-sources' },
+      { to: '/pipeline/ingestion', labelKey: 'sidebar.pipeline.ingestion', icon: ArrowDownToLine, testId: 'nav-pipeline-ingestion' },
+      { to: '/pipeline/processing', labelKey: 'sidebar.pipeline.processing', icon: Cog, testId: 'nav-pipeline-processing' },
+      { to: '/pipeline/storage', labelKey: 'sidebar.pipeline.storage', icon: Database, testId: 'nav-pipeline-storage' },
+      { to: '/pipeline/insights', labelKey: 'sidebar.pipeline.insights', icon: BarChart3, testId: 'nav-pipeline-insights' },
+    ],
+  },
+];
+
+const legacyShelves: NavShelf[] = [
   {
     titleKey: 'sidebar.group.web',
     items: [
@@ -55,33 +76,123 @@ const groups: NavGroup[] = [
   },
 ];
 
+const PIPELINE_OPEN_KEY = 'hermetra.sidebar.pipelineOpen';
 const LEGACY_OPEN_KEY = 'hermetra.sidebar.legacyOpen';
 
 /**
- * Starts **open**, and remembers.
+ * Each drawer remembers how you left it; the fallback is only ever the first
+ * launch. Data Pipeline opens, Legacy does not.
  *
- * Every screen this app has lives inside the drawer, so opening collapsed would
- * hide the app from itself on first launch. Folding it away is therefore a
- * deliberate act — and one the app does not undo behind your back.
+ * Both used to open, because every screen this app had lived in one drawer and
+ * starting collapsed would have hidden the app from itself. Fifteen rows no
+ * longer fit a 1024x720 rail with both open — the last one is clipped to a
+ * sliver — so one has to give, and the group named "Legacy" is the one whose
+ * own name says it does not lead. It is a click away, and that click sticks.
  */
-const readStoredOpen = (): boolean => {
+const readStoredOpen = (key: string, fallbackOpen: boolean): boolean => {
   try {
-    return window.localStorage.getItem(LEGACY_OPEN_KEY) !== 'false';
+    const stored = window.localStorage.getItem(key);
+    return stored === null ? fallbackOpen : stored !== 'false';
   } catch {
-    return true;
+    return fallbackOpen;
   }
 };
 
-const writeStoredOpen = (open: boolean): void => {
+const writeStoredOpen = (key: string, open: boolean): void => {
   try {
-    window.localStorage.setItem(LEGACY_OPEN_KEY, String(open));
+    window.localStorage.setItem(key, String(open));
   } catch {
     /* a rail that cannot remember is still a rail */
   }
 };
 
+interface NavDrawerProps {
+  titleKey: MessageKey;
+  toggleTestId: string;
+  storageKey: string;
+  /** First-launch state only. Once the user folds or opens it, that wins. */
+  defaultOpen: boolean;
+  shelves: NavShelf[];
+}
+
 /**
- * The rail is the darkest surface in the app; each group is a card lifted out
+ * One collapsible card in the rail. The group title owns a full-bleed band here,
+ * and a band inside a band reads as two competing headers — so a shelf one level
+ * down is a plain muted label, and a drawer with a single unnamed shelf shows no
+ * label at all.
+ */
+function NavDrawer({ titleKey, toggleTestId, storageKey, defaultOpen, shelves }: NavDrawerProps) {
+  const t = useT();
+  const [open, setOpen] = useState(() => readStoredOpen(storageKey, defaultOpen));
+
+  const toggle = () => {
+    setOpen((wasOpen) => {
+      writeStoredOpen(storageKey, !wasOpen);
+      return !wasOpen;
+    });
+  };
+
+  return (
+    <section className="overflow-hidden rounded-lg bg-card shadow">
+      <h2>
+        <button
+          type="button"
+          data-testid={toggleTestId}
+          aria-expanded={open}
+          onClick={toggle}
+          className={cn(
+            'flex h-8 w-full items-center gap-1.5 bg-muted px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground',
+            'transition-colors hover:bg-accent',
+            open && 'border-b border-border',
+          )}
+        >
+          <ChevronRight
+            className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')}
+            aria-hidden="true"
+          />
+          <span>{t(titleKey)}</span>
+        </button>
+      </h2>
+
+      {open && (
+        <div className="space-y-1 p-1.5">
+          {shelves.map((shelf, i) => (
+            <div key={shelf.titleKey ?? i}>
+              {shelf.titleKey && (
+                <p className="px-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  {t(shelf.titleKey)}
+                </p>
+              )}
+              <ul className="space-y-0.5">
+                {shelf.items.map((item) => (
+                  <li key={item.to}>
+                    <NavLink
+                      to={item.to}
+                      data-testid={item.testId}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors',
+                          'hover:bg-accent hover:text-foreground',
+                          isActive && 'bg-muted font-semibold text-foreground shadow-inner',
+                        )
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{t(item.labelKey)}</span>
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The rail is the darkest surface in the app; each drawer is a card lifted out
  * of it. Nothing here is tinted — the sidebar used to mark its groups and its
  * selected row with module accents, and an accent on a card is exactly what
  * this product's design forbids.
@@ -91,21 +202,12 @@ const writeStoredOpen = (open: boolean): void => {
  * That keeps the highlight inside the list's own grid instead of floating a
  * coloured box out of it, and it survives being seen in greyscale.
  *
- * The three groups sit inside one collapsible card rather than standing as three
- * of their own. The group title owns a full-bleed band in this rail, and a band
- * inside a band reads as two competing headers — so a shelf one level down is a
- * plain muted label instead.
+ * Data Pipeline sits above Legacy because that is the ordering the two names
+ * already claim — web / mobile / bridge became "Legacy" precisely so the
+ * pipeline could take the top of the rail.
  */
 export function Sidebar() {
   const t = useT();
-  const [open, setOpen] = useState(readStoredOpen);
-
-  const toggle = () => {
-    setOpen((wasOpen) => {
-      writeStoredOpen(!wasOpen);
-      return !wasOpen;
-    });
-  };
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-border bg-sidebar">
@@ -120,59 +222,20 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-2 overflow-y-auto p-2">
-        <section className="overflow-hidden rounded-lg bg-card shadow">
-          <h2>
-            <button
-              type="button"
-              data-testid="nav-legacy-toggle"
-              aria-expanded={open}
-              onClick={toggle}
-              className={cn(
-                'flex h-8 w-full items-center gap-1.5 bg-muted px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground',
-                'transition-colors hover:bg-accent',
-                open && 'border-b border-border',
-              )}
-            >
-              <ChevronRight
-                className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')}
-                aria-hidden="true"
-              />
-              <span>{t('sidebar.group.legacy')}</span>
-            </button>
-          </h2>
-
-          {open && (
-            <div className="space-y-1 p-1.5">
-              {groups.map((group) => (
-                <div key={group.titleKey}>
-                  <p className="px-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                    {t(group.titleKey)}
-                  </p>
-                  <ul className="space-y-0.5">
-                    {group.items.map((item) => (
-                      <li key={item.to}>
-                        <NavLink
-                          to={item.to}
-                          data-testid={item.testId}
-                          className={({ isActive }) =>
-                            cn(
-                              'flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors',
-                              'hover:bg-accent hover:text-foreground',
-                              isActive && 'bg-muted font-semibold text-foreground shadow-inner',
-                            )
-                          }
-                        >
-                          <item.icon className="h-4 w-4" />
-                          <span>{t(item.labelKey)}</span>
-                        </NavLink>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        <NavDrawer
+          titleKey="sidebar.group.pipeline"
+          toggleTestId="nav-pipeline-toggle"
+          storageKey={PIPELINE_OPEN_KEY}
+          defaultOpen
+          shelves={pipelineShelves}
+        />
+        <NavDrawer
+          titleKey="sidebar.group.legacy"
+          toggleTestId="nav-legacy-toggle"
+          storageKey={LEGACY_OPEN_KEY}
+          defaultOpen={false}
+          shelves={legacyShelves}
+        />
       </nav>
 
       <div className="border-t border-border p-2.5 text-[10px] text-muted-foreground">

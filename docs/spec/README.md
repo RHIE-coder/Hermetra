@@ -11,7 +11,7 @@ steward 의 `spec` 단계가 이 트리를 고치고, `gate` 단계가 코드와
 
 ```
 Application  제품 전체 (이 README + application.md)
-└─ Service   web · mobile · bridge · workspace      → <service>/README.md
+└─ Service   pipeline · web · mobile · bridge · workspace   → <service>/README.md
    └─ Surface   화면 하나                            → <service>/<surface>.md
       └─ Section  화면 안의 영역
          └─ Component  영역 안의 부품
@@ -48,6 +48,12 @@ UI 라벨은 ID가 아니다 — 라벨은 `src/renderer/lib/messages.ts` 의 en
 
 | Service | Surface ID | 라우트 | nav testid | 정본 |
 |---|---|---|---|---|
+| pipeline | `pipeline.jobs` | `/pipeline/jobs` | `nav-pipeline-jobs` | `pipeline/jobs.md` |
+| pipeline | `pipeline.sources` | `/pipeline/sources` | `nav-pipeline-sources` | `pipeline/sources.md` |
+| pipeline | `pipeline.ingestion` | `/pipeline/ingestion` | `nav-pipeline-ingestion` | `pipeline/ingestion.md` |
+| pipeline | `pipeline.processing` | `/pipeline/processing` | `nav-pipeline-processing` | `pipeline/processing.md` |
+| pipeline | `pipeline.storage` | `/pipeline/storage` | `nav-pipeline-storage` | `pipeline/storage.md` |
+| pipeline | `pipeline.insights` | `/pipeline/insights` | `nav-pipeline-insights` | `pipeline/insights.md` |
 | web | `web.remote` | `/web/remote` | `nav-web-remote` | `web/remote.md` |
 | web | `web.code` | `/web/code` | `nav-web-code` | `web/code.md` |
 | mobile | `mobile.devices` | `/mobile/devices` | `nav-mobile-devices` | `mobile/devices.md` |
@@ -77,6 +83,10 @@ steward 는 이 프로젝트 중간에 도입됐고, 위 정본은 그 시점의
 
 미구현으로 명시된 것 하나가 결정을 기다린다: `mobile/README.md` 의
 `connection-to-session-gap`.
+
+2026-08-10 에 `pipeline` Service 가 **껍데기로** 들어왔다 — 화면 여섯의 이름·라우트·순서만
+확정하고 동작은 없다. 그 여섯 정본은 "무엇이 여기 들어와야 하는가" 한 문단씩이며, 화면이
+채워질 때 함께 채운다. 지금 정본이 있는 화면은 16개다.
 
 이후 개별 작업에서 걸리는 노드는 그 작업의 `spec` 단계가 갱신한다. 과거 작업 단위 스펙은
 `.specs/done/` 에 그대로 있다(역사 기록이며 정본이 아니다).

@@ -2,6 +2,7 @@
 core: steward
 managed_by: steward
 schema_version: 1
+feature: data-pipeline-nav
 phases:
   - intake
   - spec

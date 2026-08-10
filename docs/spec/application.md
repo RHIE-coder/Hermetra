@@ -9,33 +9,49 @@
 
 ### `app.shell.sidebar` — 사이드바
 
-폭 고정. 브랜드 마크 + 제품명 한 줄, **접히는 카드 한 장**, 하단 푸터. 머리에 태그라인은 두지
+폭 고정. 브랜드 마크 + 제품명 한 줄, **접히는 카드 두 장**, 하단 푸터. 머리에 태그라인은 두지
 않는다 — 첫 실행에만 유효한 문구이고, 이 자리에서 실제로 바뀌는 정보(활성 워크스페이스)는
 상단바가 이미 들고 있다.
 
-웹·모바일·브리지는 **레거시 서랍**(`nav-legacy-toggle`) 안의 선반 셋이다. 카드 셋으로
-세우지 않는 이유는 그룹 제목이 이 레일에서 full-bleed 띠를 갖기 때문이다 — 띠 안의 띠는
-서로 경쟁하는 두 머리로 읽힌다. 한 단 내려간 선반은 얇은 muted 라벨이다.
+서랍은 둘이고, 위에서부터 **데이터 파이프라인**(`nav-pipeline-toggle`) ·
+**레거시**(`nav-legacy-toggle`) 다. 각 서랍은 자기 열림 상태를 따로 기억한다. 웹·모바일·브리지가
+레거시 한 장으로 접힌 것은 파이프라인이 레일의 위를 갖기 위해서였고, 이름이 그 순서를 이미
+말하고 있다.
+
+파이프라인 서랍은 선반 없이 항목 여섯이다 — 그 순서가 곧 파이프라인이다. 레거시 서랍은 선반
+셋을 갖는다. 카드 셋으로 세우지 않는 이유는 그룹 제목이 이 레일에서 full-bleed 띠를 갖기
+때문이다 — 띠 안의 띠는 서로 경쟁하는 두 머리로 읽힌다. 한 단 내려간 선반은 얇은 muted
+라벨이다.
 
 액센트 열은 두지 않는다 — 이 레일에는 영역 색이 없고(`app.theme`), 선택은 색이 아니라
 깊이로 읽힌다.
 
-| 선반 | 항목 (라우트 / testid) |
-|---|---|
-| 웹 | 브라우저 `/web/remote` `nav-web-remote` · 스크립트 `/web/code` `nav-web-code` |
-| 모바일 | 디바이스 `/mobile/devices` `nav-mobile-devices` · 스크립트 `/mobile/code` `nav-mobile-code` · 인스펙터 `/mobile/inspector` `nav-mobile-inspector` |
-| 브리지 | 시나리오 `/bridge/scenarios` · 변수 `/bridge/variables` · 공유 버스 `/bridge/bus` · 이벤트 `/bridge/events` |
+| 서랍 | 선반 | 항목 (라우트 / testid) |
+|---|---|---|
+| 데이터 파이프라인 | — | 작업 `/pipeline/jobs` `nav-pipeline-jobs` · 소스 `/pipeline/sources` `nav-pipeline-sources` · 수집 `/pipeline/ingestion` `nav-pipeline-ingestion` · 처리 `/pipeline/processing` `nav-pipeline-processing` · 저장소 `/pipeline/storage` `nav-pipeline-storage` · 인사이트 `/pipeline/insights` `nav-pipeline-insights` |
+| 레거시 | 웹 | 브라우저 `/web/remote` `nav-web-remote` · 스크립트 `/web/code` `nav-web-code` |
+| 레거시 | 모바일 | 디바이스 `/mobile/devices` `nav-mobile-devices` · 스크립트 `/mobile/code` `nav-mobile-code` · 인스펙터 `/mobile/inspector` `nav-mobile-inspector` |
+| 레거시 | 브리지 | 시나리오 `/bridge/scenarios` · 변수 `/bridge/variables` · 공유 버스 `/bridge/bus` · 이벤트 `/bridge/events` |
 
 인수조건:
 
-- `AC-app.shell.sidebar-01` 서랍이 열려 있으면 항목 9개가 렌더된다. 각 항목의
+- `AC-app.shell.sidebar-01` 서랍 둘이 다 열려 있으면 항목 15개가 렌더된다. 각 항목의
   `data-testid` 는 위 표와 일치한다(e2e 와 표면 어댑터가 이 ID로 화면을 찾는다).
-- `AC-app.shell.sidebar-04` 서랍은 **열린 채로 뜬다.** 이 앱의 모든 화면이 그 안에 있어서,
-  접힌 채 시작하면 앱이 자기 자신을 가린다. 접는 것은 의도한 행동이고 앱이 그것을 기억한다.
-- `AC-app.shell.sidebar-05` 접으면 항목 9개가 DOM 에서 사라지고, 다시 누르면 돌아온다.
+- `AC-app.shell.sidebar-04` **첫 실행에 데이터 파이프라인은 열려 있고 레거시는 접혀 있다.**
+  둘 다 열면 1024x720 레일이 31px 모자라 마지막 행이 잘린다 — 이름이 "레거시" 인 쪽이
+  양보한다. 이건 첫 실행 값일 뿐이고, 사용자가 접거나 편 뒤에는 그쪽이 이긴다. 앱이 그것을
+  뒤집지 않는다.
+- `AC-app.shell.sidebar-05` 한 서랍을 접으면 그 서랍의 항목만 DOM 에서 사라진다. 다른 서랍의
+  열림 상태도, 그 기억도 건드리지 않는다.
+- `AC-app.shell.sidebar-06` 파이프라인 항목 여섯은 **파이프라인 순서**로 놓인다
+  (작업 → 소스 → 수집 → 처리 → 저장소 → 인사이트). 이 레일이 파이프라인의 모양을 말하는
+  유일한 자리라서, 순서가 섞이면 제품을 다시 말하는 셈이 된다.
 - `AC-app.shell.sidebar-02` 항목을 누르면 그 라우트로 이동하고 해당 페이지의
   `page-*` 컨테이너가 보인다.
 - `AC-app.shell.sidebar-03` 현재 라우트의 항목은 활성 상태로 구분된다.
+- `AC-app.shell.sidebar-07` 레일은 세로로 스크롤된다. 서랍 둘을 다 연 좁은 창에서는 마지막
+  행이 접힌 선 아래로 내려가며, 그것은 결함이 아니라 스크롤로 닿는 상태다 —
+  기계 판정도 그렇게 읽는다(`app.theme` `AC-app.theme-03` 주석 참조).
 
 ### `app.shell.topbar` — 상단바
 
@@ -143,4 +159,9 @@
   표적이 아니지만 어댑터는 DOM 만 보므로 걸러지지 않는다. 새 위반은 커밋이 막히지만 이
   항목은 통과된다. 배경은 `../qa/coverage-gaps.md` 의 `gap-visual-baseline`.
 - 기계 판정은 그 폼팩터에서 **실제로 보이는 것**만 본다. 접힌 선 아래 내용과 내부
-  스크롤러(편집기) 안쪽은 이 검증에 안 들어온다.
+  스크롤러(편집기) 안쪽은 이 검증에 안 들어온다. 스크롤로 닿을 수 있어서 일부만 보이는
+  요소는 어댑터가 `offscreen` 으로 표시하고, 표적 크기 판정은 그런 요소를 건너뛴다 —
+  화면 밖으로 밀린 32px 행을 "7px 짜리 못 누를 표적" 으로 읽으면 스크롤되는 목록을 가진
+  표면이 전부 영구 위반이 된다. 스크롤되지 **않는** 조상이 자른 잘림은 여전히 걸린다.
+- **데이터 파이프라인 화면 여섯은 전부 껍데기다** — 내비게이션과 라우트만 있고 동작이 없다.
+  배경과 계획은 `pipeline/README.md`.

@@ -43,9 +43,13 @@ function navTargets() {
 // 접힌 서랍 안의 화면도 판정 대상이다 — 행이 DOM 에 없으면 서랍을 열고 다시 본다.
 // 못 열면 그대로 둔다: 뒤따르는 click 이 실패하고 그 캡처가 cannot-verify 로 남는 것이
 // 맞다(못 본 것을 통과로 적지 않는다).
+// 서랍은 둘이고 따로 접힌다 — 행이 속한 서랍의 손잡이를 잡는다.
+const drawerToggle = (nav) =>
+  nav.startsWith('nav-pipeline-') ? 'nav-pipeline-toggle' : 'nav-legacy-toggle';
+
 async function revealNav(win, nav) {
   if (await win.getByTestId(nav).isVisible().catch(() => false)) return;
-  const toggle = win.getByTestId('nav-legacy-toggle');
+  const toggle = win.getByTestId(drawerToggle(nav));
   if (await toggle.isVisible().catch(() => false)) await toggle.click();
 }
 
@@ -127,26 +131,43 @@ const EXTRACTOR = () => {
    * 그 안쪽으로 교집합을 취한다. 안 그러면 편집기 같은 내부 스크롤러의 내용이 "화면 밖으로
    * 삐져나온 것" 으로 잡히고(Monaco 는 폭 16777214 짜리 측정 노드를 둔다), 사람이 실제로
    * 보는 것과 모델이 어긋난다.
+   *
+   * 잘림에는 두 종류가 있고, 둘을 같이 신고하면 판정기가 거짓말을 한다:
+   *
+   *   - **못 닿는 잘림.** 스크롤되지 않는 조상이 잘랐다. 남은 조각이 그 요소의 전부다.
+   *   - **스크롤로 닿는 잘림.** 그 축으로 실제 스크롤되는 조상이 잘랐다. 나머지는 사라진 게
+   *     아니라 접힌 선 아래에 있다 — 목록이 길어지면 늘 생기는 정상 상태다.
+   *
+   * 뒤쪽을 `offscreen` 으로 표시해 내보낸다. 크기 판정(표적)은 이걸 보고 빠져야 한다.
+   * 화면 밖으로 밀린 32px 행을 "7px 짜리 못 누를 표적" 으로 읽으면, 스크롤되는 목록을
+   * 가진 표면은 전부 영구 위반이 된다.
    */
   const visibleRect = (node) => {
-    let r = node.getBoundingClientRect();
+    const r = node.getBoundingClientRect();
     let box = { l: r.left, t: r.top, rt: r.right, b: r.bottom };
+    let offscreen = false;
     let el = node.parentElement;
     while (el) {
       const cs = getComputedStyle(el);
       if (cs.overflow !== 'visible' || cs.overflowX !== 'visible' || cs.overflowY !== 'visible') {
         const p = el.getBoundingClientRect();
-        box = {
+        const next = {
           l: Math.max(box.l, p.left),
           t: Math.max(box.t, p.top),
           rt: Math.min(box.rt, p.right),
           b: Math.min(box.b, p.bottom),
         };
+        // 잘린 축과 스크롤되는 축이 같을 때만 "닿을 수 있다" 고 본다.
+        const cutY = next.t > box.t + 0.5 || next.b < box.b - 0.5;
+        const cutX = next.l > box.l + 0.5 || next.rt < box.rt - 0.5;
+        if (cutY && el.scrollHeight > el.clientHeight + 1) offscreen = true;
+        if (cutX && el.scrollWidth > el.clientWidth + 1) offscreen = true;
+        box = next;
         if (box.rt <= box.l || box.b <= box.t) return null; // 완전히 잘려 보이지 않는다
       }
       el = el.parentElement;
     }
-    return { x: box.l, y: box.t, w: box.rt - box.l, h: box.b - box.t };
+    return { x: box.l, y: box.t, w: box.rt - box.l, h: box.b - box.t, offscreen };
   };
 
   const out = [];
@@ -192,6 +213,8 @@ const EXTRACTOR = () => {
       },
       states,
       interactive,
+      // 보이는 조각이 전부가 아니다 — 나머지는 스크롤하면 나온다.
+      ...(rect.offscreen ? { offscreen: true } : {}),
       truncated: Boolean(own) && clipped && el.scrollWidth > el.clientWidth + 1,
       essential: true,
       textSize: own

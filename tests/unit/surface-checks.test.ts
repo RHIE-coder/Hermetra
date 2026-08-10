@@ -209,6 +209,32 @@ describe('surface-verify judge — layout checks', () => {
     );
     expect(checks(noPointer)).not.toContain('hit-target');
   });
+
+  /**
+   * `offscreen` says the reported box is a *view* of the element, not its size —
+   * the rest is reachable by scrolling. Reading that as a size makes the last row
+   * of any list long enough to scroll a permanent violation, which is how a gate
+   * stops being read at all.
+   */
+  it('does not size-check a target whose box is only the part still on screen', () => {
+    const scrolledOut = {
+      role: 'link',
+      interactive: true,
+      offscreen: true,
+      bounds: { x: 14, y: 677, w: 187, h: 7 },
+    };
+    expect(checks(judge([capture({ elements: [el(scrolledOut)] })]))).not.toContain('hit-target');
+  });
+
+  it('still blocks a target that is genuinely that small, scrolling or not', () => {
+    const tiny = {
+      role: 'link',
+      interactive: true,
+      offscreen: false,
+      bounds: { x: 14, y: 100, w: 187, h: 7 },
+    };
+    expect(checks(judge([capture({ elements: [el(tiny)] })]))).toContain('hit-target');
+  });
 });
 
 describe('surface-verify judge — render and verifiability', () => {

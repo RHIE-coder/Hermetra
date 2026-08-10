@@ -19,6 +19,13 @@ import { VariableBusPage } from './modules/bridge/pages/VariableBusPage';
 import { EventStreamPage } from './modules/bridge/pages/EventStreamPage';
 import { VariablesPage } from './modules/bridge/pages/VariablesPage';
 
+import { JobsPage } from './modules/pipeline/pages/JobsPage';
+import { SourcesPage } from './modules/pipeline/pages/SourcesPage';
+import { IngestionPage } from './modules/pipeline/pages/IngestionPage';
+import { ProcessingPage } from './modules/pipeline/pages/ProcessingPage';
+import { StoragePage } from './modules/pipeline/pages/StoragePage';
+import { InsightsPage } from './modules/pipeline/pages/InsightsPage';
+
 export function App() {
   const initBridge = useBridgeStore((s) => s.init);
   const initWeb = useWebStore((s) => s.init);
@@ -56,7 +63,18 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<AppShell />}>
+        {/* The landing screen stays Scenarios: every Data Pipeline screen is a
+            shell, and booting the app onto an empty one would read as broken. */}
         <Route index element={<Navigate to="/bridge/scenarios" replace />} />
+        <Route path="pipeline">
+          <Route index element={<Navigate to="jobs" replace />} />
+          <Route path="jobs" element={<JobsPage />} />
+          <Route path="sources" element={<SourcesPage />} />
+          <Route path="ingestion" element={<IngestionPage />} />
+          <Route path="processing" element={<ProcessingPage />} />
+          <Route path="storage" element={<StoragePage />} />
+          <Route path="insights" element={<InsightsPage />} />
+        </Route>
         <Route path="web">
           <Route index element={<Navigate to="remote" replace />} />
           <Route path="remote" element={<RemoteBrowserPage />} />

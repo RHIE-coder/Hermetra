@@ -42,6 +42,13 @@ const en = {
 
   // sidebar
   'sidebar.footer': 'v0.1.0',
+  'sidebar.group.pipeline': 'Data Pipeline',
+  'sidebar.pipeline.jobs': 'Jobs',
+  'sidebar.pipeline.sources': 'Sources',
+  'sidebar.pipeline.ingestion': 'Ingestion',
+  'sidebar.pipeline.processing': 'Processing',
+  'sidebar.pipeline.storage': 'Storage',
+  'sidebar.pipeline.insights': 'Insights',
   'sidebar.group.legacy': 'Legacy',
   'sidebar.group.web': 'Web',
   'sidebar.group.mobile': 'Mobile',
@@ -318,6 +325,29 @@ const en = {
   'bridge.events.timeline': 'Timeline',
   'bridge.events.empty': 'No events yet.',
 
+  // data pipeline — the six stage screens. Each one is a shell for now; the
+  // subtitle is the contract for what will live there.
+  'pipeline.placeholder.title': 'Nothing here yet',
+  'pipeline.placeholder.body':
+    'This screen is reserved. The navigation and the route exist so the shape of the pipeline is settled before any of it is built.',
+  'pipeline.jobs.title': 'Jobs',
+  'pipeline.jobs.subtitle':
+    'Saved run flows that chain a source, an ingestion, a processing step and a storage target — plus what is running right now.',
+  'pipeline.sources.title': 'Sources',
+  'pipeline.sources.subtitle':
+    'Where data comes from: API endpoints and the sites to crawl or scrape.',
+  'pipeline.ingestion.title': 'Ingestion',
+  'pipeline.ingestion.subtitle':
+    'Pulling data out of a source into raw records, before any processing touches it.',
+  'pipeline.processing.title': 'Processing',
+  'pipeline.processing.subtitle':
+    'Turning raw records into the shape the rest of the pipeline expects.',
+  'pipeline.storage.title': 'Storage',
+  'pipeline.storage.subtitle':
+    'Where records land — raw straight off ingestion, or processed once a step is done with them.',
+  'pipeline.insights.title': 'Insights',
+  'pipeline.insights.subtitle': 'Visualising and reporting on what the pipeline has collected.',
+
   // time
   'time.justNow': 'just now',
   'time.secondsAgo': '{n}s ago',
@@ -435,6 +465,13 @@ const ko: Record<keyof typeof en, string> = {
 
   // sidebar
   'sidebar.footer': 'v0.1.0',
+  'sidebar.group.pipeline': '데이터 파이프라인',
+  'sidebar.pipeline.jobs': '작업',
+  'sidebar.pipeline.sources': '소스',
+  'sidebar.pipeline.ingestion': '수집',
+  'sidebar.pipeline.processing': '처리',
+  'sidebar.pipeline.storage': '저장소',
+  'sidebar.pipeline.insights': '인사이트',
   'sidebar.group.legacy': '레거시',
   'sidebar.group.web': '웹',
   'sidebar.group.mobile': '모바일',
@@ -702,6 +739,26 @@ const ko: Record<keyof typeof en, string> = {
   'bridge.events.channelPlaceholder': 'event.channel',
   'bridge.events.timeline': '타임라인',
   'bridge.events.empty': '아직 이벤트가 없습니다.',
+
+  // 데이터 파이프라인 — 단계 화면 여섯. 지금은 전부 껍데기고, 부제가 그 자리에
+  // 무엇이 들어올지에 대한 약속이다.
+  'pipeline.placeholder.title': '아직 비어 있습니다',
+  'pipeline.placeholder.body':
+    '자리만 잡아 둔 화면입니다. 무엇을 만들기 전에 파이프라인의 모양을 먼저 확정하려고 내비게이션과 라우트를 먼저 두었습니다.',
+  'pipeline.jobs.title': '작업',
+  'pipeline.jobs.subtitle':
+    '소스 · 수집 · 처리 · 저장소를 하나로 잇는 실행 플로우를 등록해 두는 곳이자, 지금 돌고 있는 작업을 보는 곳입니다.',
+  'pipeline.sources.title': '소스',
+  'pipeline.sources.subtitle': '데이터가 나오는 곳 — API 엔드포인트와 크롤링·스크래핑 대상 사이트.',
+  'pipeline.ingestion.title': '수집',
+  'pipeline.ingestion.subtitle': '소스에서 데이터를 꺼내 원천 데이터로 만드는 단계. 처리 이전입니다.',
+  'pipeline.processing.title': '처리',
+  'pipeline.processing.subtitle': '원천 데이터를 뒤 단계가 기대하는 모양으로 바꾸는 단계.',
+  'pipeline.storage.title': '저장소',
+  'pipeline.storage.subtitle':
+    '데이터가 쌓이는 곳 — 수집 직후의 원천 데이터도, 처리를 마친 데이터도 여기로 갑니다.',
+  'pipeline.insights.title': '인사이트',
+  'pipeline.insights.subtitle': '파이프라인이 모은 것을 시각화하고 리포트로 보는 화면.',
 
   // time
   'time.justNow': '방금 전',

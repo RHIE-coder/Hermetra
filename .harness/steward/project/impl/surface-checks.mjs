@@ -179,7 +179,11 @@ export function judge(results, options = {}) {
           add('fits', label(e), `bounds ${b.x},${b.y} ${b.w}x${b.h} outside ${ff.w}x${ff.h}`);
         }
       }
-      if ((profile.hasPointer || profile.hasTouch) && e.interactive && e.bounds) {
+      // 표적 크기는 **그 표적의 크기**를 재는 것이다. `offscreen` 은 보이는 조각이 전부가
+      // 아니라는 뜻이고(나머지는 스크롤하면 나온다), 그때의 사각형은 크기가 아니라 위치를
+      // 말한다 — 그걸 크기로 읽으면 스크롤되는 목록의 마지막 줄이 언제나 위반이 된다.
+      // 못 닿는 잘림은 `offscreen` 이 아니므로 여기서 그대로 걸린다.
+      if ((profile.hasPointer || profile.hasTouch) && e.interactive && e.bounds && !e.offscreen) {
         const min = profile.minTarget ?? 24;
         if (e.bounds.w + 1e-9 < min || e.bounds.h + 1e-9 < min) {
           add('hit-target', label(e), `${e.bounds.w}x${e.bounds.h} < ${min}`);
