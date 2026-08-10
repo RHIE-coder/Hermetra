@@ -38,9 +38,11 @@ export default tseslint.config(
     languageOptions: { sourceType: 'commonjs', globals: globals.node },
   },
 
-  // Main + preload: Node runtime.
+  // Main + preload: Node runtime. `.mjs` is included because the fetch sidecar's
+  // launcher ships as one — it runs under real Node, not Electron, so it is
+  // deliberately outside the TypeScript bundle (see src/main/sidecar/).
   {
-    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'src/shared/**/*.ts'],
+    files: ['src/main/**/*.{ts,mjs}', 'src/preload/**/*.ts', 'src/shared/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
 

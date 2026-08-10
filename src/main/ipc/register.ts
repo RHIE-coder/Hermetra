@@ -20,6 +20,7 @@ import { myDevicesService } from '../services/myDevices';
 import { connectionsService } from '../services/connections';
 import { appleCertsService } from '../services/appleCerts';
 import { BrowserInstaller } from '../services/browserInstall';
+import { createSidecarSupervisor } from '../sidecar';
 import { discardDraft, finishFeedback, saveDraftStep } from '../services/devFeedback';
 import type { Workspace } from '@shared/types/workspace';
 
@@ -31,6 +32,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   const orchestrator = new ScenarioOrchestrator({ web, mobile, events });
   const workspace = workspaceManager();
   const installer = new BrowserInstaller();
+  // The fetch sidecar is not started here — the pipeline asks for it when it
+  // needs a browser, and a stealth browser idling for a user who never opens
+  // that screen is pure cost.
+  const sidecar = createSidecarSupervisor(__dirname);
   const userDataDir = app.isReady() ? app.getPath('userData') : process.cwd();
   const myDevices = myDevicesService(userDataDir);
 
@@ -49,6 +54,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   });
   workspace.on('change', (s) => broadcast(CHANNELS.EVT_WORKSPACE_UPDATE, s));
   installer.on('log', (log) => broadcast(CHANNELS.EVT_BROWSER_INSTALL, log));
+  sidecar.on('status', (s: unknown) => broadcast(CHANNELS.EVT_SIDECAR_UPDATE, s));
+  // A sidecar that outlives its app is an orphaned browser holding a port.
+  app.on('before-quit', () => sidecar.stop());
 
   // Periodic device discovery (every 5s) for live-connect view
   let lastDevicesJson = '';
@@ -291,6 +299,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   }));
 
   /* ── Workspace ───────────────────────────────────────────────────── */
+  ipcMain.handle(CHANNELS.PIPELINE_SIDECAR_STATUS, () => sidecar.status());
+  ipcMain.handle(CHANNELS.PIPELINE_SIDECAR_START, () => { sidecar.start(); return sidecar.status(); });
+  ipcMain.handle(CHANNELS.PIPELINE_SIDECAR_STOP, () => { sidecar.stop(); return sidecar.status(); });
+
   ipcMain.handle(CHANNELS.WORKSPACE_LIST, () => workspace.list());
   ipcMain.handle(CHANNELS.WORKSPACE_SAVE, (_e, ws: Workspace) => workspace.save(ws));
   ipcMain.handle(CHANNELS.WORKSPACE_DELETE, (_e, { id }: { id: string }) => workspace.remove(id));

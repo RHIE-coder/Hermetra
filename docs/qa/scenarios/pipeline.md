@@ -52,8 +52,36 @@
 | CASE-pipeline-040 | `offscreen` 요소는 표적 크기 판정에서 빠진다 | `app.theme` | 단위 | `tests/unit/surface-checks.test.ts` |
 | CASE-pipeline-041 | 진짜로 작은 표적은 그대로 걸린다 | `app.theme` | 단위 | `tests/unit/surface-checks.test.ts` |
 
+## TestSuite: `pipeline.sidecar` — 감시와 재시작
+
+순수 감독자(상태기계 + 재시작 정책)와 어댑터(자식 → 핸들, 런타임 탐색)를 가른다. 감독자에는
+가짜 프로세스와 가짜 타이머를 넣어 spawn 없이 전 분기를 돈다.
+
+구현: `tests/unit/sidecar-supervisor.test.ts` (13) · `tests/api/sidecar.test.ts` (12)
+
+| Case | 무엇 | 덮는 노드 | 계층 | 구현 |
+|---|---|---|---|---|
+| CASE-pipeline-060 | start 하면 starting, 주소를 받으면 ready | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-061 | 주소가 아닌 출력은 무시한다 | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-062 | 이미 도는데 start 해도 자식이 둘이 되지 않는다 | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-063 | 스스로 죽으면 crashed 이고 이유가 남는다 | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-064 | 재시작이 백오프로 예약된다 | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-065 | ready 에 닿으면 재시작 횟수가 0으로 돌아간다 | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-066 | maxRestarts 를 넘기면 포기한다 | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-067 | 사람이 멈춘 것은 crashed 가 아니고 재시작도 없다 | `pipeline.sidecar` | 단위 | `sidecar-supervisor.test.ts` |
+| CASE-pipeline-080 | 두 청크에 걸친 주소를 한 줄로 잇는다 | `pipeline.sidecar` | API | `tests/api/sidecar.test.ts` |
+| CASE-pipeline-081 | 한 청크의 두 줄을 나눈다 | `pipeline.sidecar` | API | `tests/api/sidecar.test.ts` |
+| CASE-pipeline-082 | spawn 실패도 죽음으로 보고된다 | `pipeline.sidecar` | API | `tests/api/sidecar.test.ts` |
+| CASE-pipeline-083 | 런타임이 없으면 null 이고 throw 하지 않는다 | `pipeline.sidecar` | API | `tests/api/sidecar.test.ts` |
+| CASE-pipeline-084 | 채널 문자열이 유일하다 | `app.ipc` | API | `tests/api/sidecar.test.ts` |
+
 ## 아직 없는 것
 
-동작이 없으니 단위·스키마·API 계층 케이스가 하나도 없다. 이것은 구멍이 아니라 **아직 없는
-코드**다 — 화면에 로직이 붙는 순간 그 계층부터(테스트 먼저) 시작한다. `coverage-gaps.md`
-에 적지 않는 이유도 그것이다.
+**화면 여섯에는 여전히 동작이 없다.** 사이드카가 생기며 단위·API 계층이 채워졌지만 그것은
+프로세스 감시이지 수집이 아니다. 소스·수집·처리·저장소의 로직은 아직 코드가 없고, 그래서
+케이스도 없다 — 구멍이 아니라 **아직 없는 코드**이므로 `coverage-gaps.md` 에 적지 않는다.
+화면에 로직이 붙는 순간 그 계층부터(테스트 먼저) 시작한다.
+
+사이드카에서 **e2e 로 안 덮는 것**이 하나 있다: 실제 Camoufox 기동. e2e 는 mock 드라이버
+전용이고(`plan.md`), 150MB 브라우저를 받아야 도는 테스트는 스모크에 넣지 않는다. 실제 기동은
+`scratchpad/camoufox-spike/` 에서 손으로 확인했다 — Electron 안에서 Imperva 통과 9.2초.

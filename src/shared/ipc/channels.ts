@@ -28,6 +28,7 @@ import type {
   InspectorElement,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
+import type { SidecarStatus } from '../types/pipeline';
 import type {
   FeedbackRequest,
   FeedbackSaveResult,
@@ -170,6 +171,12 @@ export const CHANNELS = {
   EVT_BROWSER_UPDATE: 'evt:browser:update',
   EVT_WORKSPACE_UPDATE: 'evt:workspace:update',
   EVT_BROWSER_INSTALL: 'evt:browser:install',
+  EVT_SIDECAR_UPDATE: 'evt:pipeline:sidecar',
+
+  // Data pipeline — the fetch sidecar (see shared/types/pipeline.ts)
+  PIPELINE_SIDECAR_STATUS: 'pipeline:sidecar:status',
+  PIPELINE_SIDECAR_START: 'pipeline:sidecar:start',
+  PIPELINE_SIDECAR_STOP: 'pipeline:sidecar:stop',
 } as const;
 
 export type ChannelName = typeof CHANNELS[keyof typeof CHANNELS];
@@ -272,6 +279,11 @@ export interface IpcContract {
   [CHANNELS.EVT_BROWSER_UPDATE]: { input: never; output: RemoteBrowserStatus };
   [CHANNELS.EVT_WORKSPACE_UPDATE]: { input: never; output: WorkspaceState };
   [CHANNELS.EVT_BROWSER_INSTALL]: { input: never; output: BrowserInstallLog };
+  [CHANNELS.EVT_SIDECAR_UPDATE]: { input: never; output: SidecarStatus };
+
+  [CHANNELS.PIPELINE_SIDECAR_STATUS]: { input: void; output: SidecarStatus };
+  [CHANNELS.PIPELINE_SIDECAR_START]: { input: void; output: SidecarStatus };
+  [CHANNELS.PIPELINE_SIDECAR_STOP]: { input: void; output: SidecarStatus };
 
   [CHANNELS.WORKSPACE_LIST]: { input: void; output: WorkspaceState };
   [CHANNELS.WORKSPACE_SAVE]: { input: Workspace; output: WorkspaceState };

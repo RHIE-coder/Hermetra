@@ -48,6 +48,69 @@
 둔다. 정의(Flows)와 실행(Runs)을 두 화면으로 쪼개는 안은 보류했다 — 아직 IPC 계약이 없어서
 지금 쪼개면 계약까지 미리 갈라 놓게 된다. 내용이 붙을 때 다시 본다.
 
+## `pipeline.sidecar` — 브라우저는 앱 밖에서 뜬다
+
+안티봇(Imperva·Cloudflare) 뒤의 대상을 받으려면 **Camoufox** — JS 주입이 아니라 소스를 고쳐
+빌드한 Firefox — 가 필요하다. 그것을 띄우는 `camoufox-js` 가 `better-sqlite3` 를 의존하는데,
+그 패키지가 배포하는 빌드는 **N-API 가 아니라 V8 ABI** 다(napi 심볼 1개).
+
+**Electron 안에서는 못 쓴다.** 실측:
+
+| 시도 | 결과 |
+|---|---|
+| Electron 메인 프로세스에서 `launchServer()` | **SIGSEGV** |
+| `require` 만 | 성공 — 로드는 되고 **쓰는 순간** 죽는다 |
+| `ELECTRON_RUN_AS_NODE=1` | **SIGSEGV** — 같은 V8 이라 모드와 무관 |
+| `@electron/rebuild` | "Rebuild Complete" 를 찍고 **아무것도 안 만든다** (평면 `prebuilds/` 레이아웃 미인식) |
+| **진짜 Node 자식 프로세스 + WS 연결** | **PASS** — 9.2초에 Imperva 통과 |
+
+그래서 경계가 이렇다. 이건 취향이 아니라 저 표가 정한 것이다.
+
+```
+Electron 메인 ──spawn──> node launcher.mjs ──> Camoufox (Firefox)
+     │                   (better-sqlite3 · impit 이 여기 갇힌다)
+     └──── playwright-core firefox.connect(ws://…) ───────────┘
+```
+
+부수 효과가 둘 더 있고, 둘 다 원래 필요했던 것이다: 수집을 **병렬로 돌리고 스케줄링** 하려면
+어차피 프로세스가 따로 있어야 하고, 브라우저가 죽어도 앱이 안 죽는다.
+
+### 계약
+
+- stdout 에는 `WS <ws://…>` 한 줄만 나간다. 진행 상황과 로그는 stderr 다. 수다스러운 의존성이
+  주소로 오인되지 않게 하는 유일한 방법이다.
+- SIGTERM 을 받으면 브라우저를 닫고 0 으로 끝난다.
+
+인수조건:
+
+- `AC-pipeline.sidecar-01` stdout 은 조각으로 온다. 주소가 두 청크에 걸쳐 와도, 한 청크에 두
+  줄이 와도 감독자는 **완전한 줄만** 본다.
+- `AC-pipeline.sidecar-02` 자식이 스스로 죽으면 `crashed` 가 되고 **왜 죽었는지**가 남는다.
+  재시작은 백오프(1s·2s·4s…)로 예약된다.
+- `AC-pipeline.sidecar-03` `ready` 에 도달하면 재시작 횟수가 **0으로 돌아간다.** 회복한
+  사이드카가 영원히 포기 직전 상태로 남으면 안 된다.
+- `AC-pipeline.sidecar-04` `maxRestarts` 를 넘기면 **포기한다.** 크래시 루프는 머신을 태우고
+  진짜 원인을 가린다. 포기는 상태이지 처리 실패가 아니다.
+- `AC-pipeline.sidecar-05` 사람이 멈춘 것과 죽은 것을 가른다 — `stop()` 뒤의 종료는
+  `stopped` 이고 재시작하지 않는다. 예약된 재시작도 취소한다.
+- `AC-pipeline.sidecar-06` spawn 자체가 실패해도(런타임 없음·런처 없음) **죽음으로 보고된다.**
+  오지 않을 주소를 기다리지 않는다.
+- `AC-pipeline.sidecar-07` 앱이 종료하면 사이드카도 종료한다. 살아남은 사이드카는 포트를 쥔
+  고아 브라우저다.
+- `AC-pipeline.sidecar-08` 앱이 뜰 때 자동으로 시작하지 **않는다.** 그 화면을 안 여는
+  사용자에게 스텔스 브라우저는 순수 비용이다.
+
+### 아직 없는 것 — 배포
+
+**Node 런타임을 번들해야 한다.** `process.execPath` 는 Electron 이라 못 쓴다(위 표). 지금
+`resolveNodeRuntime()` 은 `HERMETRA_NODE` → 번들 위치(`resourcesPath/node`) → PATH 순으로
+찾고, 없으면 **null 을 돌려주고 그 사실을 화면에 보고한다** — 개발 기계에서는 PATH 의 node 로
+돌지만, 패키징된 앱에는 그것이 없다.
+
+이 프로젝트에는 아직 패키징 설정 자체가 없다(`electron-builder` 없음, `dist` 스크립트 없음).
+Node 번들은 그 설정을 만들 때 함께 정한다. Camoufox 바이너리(~150MB)는 이 앱이 Chromium 을
+받는 것과 같은 방식으로 첫 실행에 받는다.
+
 ## Service 규칙
 
 - 다른 모듈과 마찬가지로 `modules/pipeline` 은 `modules/web`·`modules/mobile` 을 임포트하지
