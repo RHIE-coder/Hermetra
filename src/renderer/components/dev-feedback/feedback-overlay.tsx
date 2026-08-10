@@ -13,6 +13,10 @@
 // It deliberately uses nothing from `components/ui`. The moment this tool is
 // wanted is the moment the screen is broken, and a tool built out of the thing
 // under inspection goes down with it.
+//
+// Three containers nest here: a **flow** (screens) holds **groups** (one memo
+// each) holds **marks** (one stroke or pin each). Groups and screens cross —
+// one memo can span several screens.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BADGE_RADIUS,
@@ -25,7 +29,19 @@ import { CHANNELS } from '@shared/ipc/channels';
 import { invoke } from '@/services/ipc';
 import { useT } from '@/lib/i18n';
 import { FEEDBACK_ATTR, targetInBounds } from './inspect';
-import { boundsOfShape, eraserHit, polylinesOf, svgPath } from './draw';
+import { boundsOfShape, partHit, polylinesOf, svgPath } from './draw';
+import { FlowModal } from './flow-modal';
+import {
+  appendPart,
+  isLastPart,
+  mergeMarks,
+  moveStep,
+  partsOnScreen,
+  removePart,
+  removeStep,
+  screenSpan,
+  splitMark,
+} from './group';
 import { SketchPad } from './sketch-pad';
 import { ToolStrip } from './tool-strip';
 import {
@@ -35,6 +51,8 @@ import {
   SKETCH_BADGE_COLOR,
   type DrawTool,
   type DraftMark,
+  type DraftStep,
+  type MarkPart,
   type Point,
   type Shape,
   type Tool,
@@ -42,6 +60,17 @@ import {
 
 const HANDLE_TOP_KEY = 'hermetra.devFeedback.handleTop';
 const DOCK_KEY = 'hermetra.devFeedback.dock';
+/**
+ * Where a round in progress survives a reload.
+ *
+ * Walking several screens takes minutes, and the dev server repaints the page
+ * on every save — which is exactly what one is doing when this tool is wanted.
+ * The screen images are already on disk (in the draft folder), so only
+ * coordinates, memos and sketches live here. sessionStorage, not local: closing
+ * the window should end the round rather than leave someone else's story
+ * attached to the next one.
+ */
+const RESUME_KEY = 'hermetra.devFeedback.resume';
 // Move this far and it is a drag, not a tap. A tap pins, a drag draws.
 const DRAG_SLOP = 6;
 // A stroke smaller than this was a graze.
@@ -96,7 +125,7 @@ function bubblePosition(bounds: FeedbackRect, dock: 'top' | 'bottom') {
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
   const width = Math.min(292, vw - 16);
-  const height = 96;
+  const height = 116;
   const below = bounds.y + bounds.height + 10;
   // Never against the edge the toolbar is docked to.
   const topLimit = dock === 'top' ? 64 : 8;
@@ -112,10 +141,18 @@ function currentRoute(): string {
   return hash.startsWith('/') ? hash : '/';
 }
 
-/** Which theme the screen was in. next-themes writes the resolved one here. */
+/** Which theme this screen is in. next-themes writes the resolved one here. */
 function currentTheme(): 'light' | 'dark' | null {
   const value = document.documentElement.dataset.theme;
   return value === 'light' || value === 'dark' ? value : null;
+}
+
+/** This screen's size, recorded with it — coordinates are relative to it. */
+function viewportNow() {
+  return {
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  };
 }
 
 /**
@@ -130,14 +167,25 @@ function afterPaint(): Promise<void> {
   });
 }
 
+function reason(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function FeedbackOverlay() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [marks, setMarks] = useState<DraftMark[]>([]);
+  /** The group whose memo box is open. While it is, every new mark **joins that
+   *  group** — that is the whole of "collect several drawings into one message"
+   *  (and why there is no mode switch). */
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Shape | null>(null);
-  const [hoverId, setHoverId] = useState<number | null>(null);
+  const [hover, setHover] = useState<{ id: number; part: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  /** Grouping after the fact — the groups being picked in the list. Null when not picking. */
+  const [mergeIds, setMergeIds] = useState<number[] | null>(null);
+  /** One line for actions that quietly lose something (a merge, a dropped screen). */
+  const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [handleTop, setHandleTop] = useState(50);
@@ -145,26 +193,78 @@ export function FeedbackOverlay() {
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState<string>(MARK_COLOR);
   const [width, setWidth] = useState<number>(MARK_WIDTH);
-  /** The mark whose sketch pad is open. While it is, on-screen drawing is covered. */
+  /** The group whose sketch pad is open. While it is, on-screen drawing is covered. */
   const [sketchFor, setSketchFor] = useState<number | null>(null);
+  /** Screens already frozen. Their order in the array is the flow order. */
+  const [steps, setSteps] = useState<DraftStep[]>([]);
+  /** The draft folder collecting on disk. Minted by main on the first freeze. */
+  const [draftFolder, setDraftFolder] = useState<string | null>(null);
+  const [flowOpen, setFlowOpen] = useState(false);
 
   const nextId = useRef(1);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Identity of the screen being drawn on: one past the highest frozen.
+   * Not the array length — dropping a screen shortens it, and reusing that
+   * number would glue live marks onto a different screen.
+   */
+  const screen = steps.reduce((max, s) => Math.max(max, s.seq), 0) + 1;
+
   useEffect(() => {
     setHandleTop(clamp(Number(readStored(HANDLE_TOP_KEY, '50')) || 50, 8, 92));
     setDock(readStored(DOCK_KEY, 'top') === 'bottom' ? 'bottom' : 'top');
+    // Pick up a round left mid-flight. Losing several screens to one reload
+    // would mean nobody uses this twice.
+    try {
+      const raw = window.sessionStorage.getItem(RESUME_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw) as { draftFolder: string; steps: DraftStep[]; marks: DraftMark[] };
+      // Shape-check rather than trust: a round saved by an older build would
+      // otherwise come back as marks the renderer cannot draw.
+      if (!Array.isArray(state.steps) || state.steps.length === 0) return;
+      if (!Array.isArray(state.marks) || state.marks.some((m) => !Array.isArray(m.parts))) return;
+      setDraftFolder(state.draftFolder);
+      setSteps(state.steps);
+      setMarks(state.marks);
+      nextId.current = Math.max(0, ...state.marks.map((m) => m.id)) + 1;
+    } catch {
+      /* unreadable means start fresh — resuming is a bonus, not a premise */
+    }
   }, []);
 
-  const close = useCallback(() => {
+  // Keep the round in progress written down. The screen images are already on
+  // disk, so this is only coordinates, memos and sketches.
+  useEffect(() => {
+    try {
+      if (draftFolder === null) window.sessionStorage.removeItem(RESUME_KEY);
+      else window.sessionStorage.setItem(RESUME_KEY, JSON.stringify({ draftFolder, steps, marks }));
+    } catch {
+      /* full or blocked storage costs the resume, not the round in hand */
+    }
+  }, [draftFolder, steps, marks]);
+
+  /** Folds away what is on screen. The collected flow stays alive. */
+  const collapse = useCallback(() => {
     setOpen(false);
-    setMarks([]);
     setDraft(null);
     setEditingId(null);
-    setHoverId(null);
+    setHover(null);
     setListOpen(false);
+    setMergeIds(null);
     setSketchFor(null);
+    setFlowOpen(false);
   }, []);
+
+  /** Throws the whole round away, including the draft on disk. */
+  const close = useCallback(() => {
+    collapse();
+    setMarks([]);
+    setSteps([]);
+    setNotice(null);
+    if (draftFolder) void invoke(CHANNELS.DEV_FEEDBACK_DISCARD, { draft: draftFolder }).catch(() => {});
+    setDraftFolder(null);
+  }, [collapse, draftFolder]);
 
   // Freeze the screen. If an animation or a scroll moves things while marking,
   // the mark ends up pointing at a different element than the one under it.
@@ -186,6 +286,57 @@ export function FeedbackOverlay() {
     };
   }, [open]);
 
+  /** One line of feedback about the tool itself. A failure leaves the overlay
+   *  open, so this is where it has to be said to be seen. */
+  const say = (message: string, ms = 4000) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(null), ms);
+  };
+
+  /**
+   * Freezes the screen in hand into the flow — main photographs the window and
+   * writes it into the draft folder, and it joins the list of steps.
+   *
+   * **Freezing before leaving the screen is the whole point.** Photographing
+   * once at send time means that the moment the user navigates, coordinates
+   * from the previous screen start pointing at unrelated places on this one.
+   */
+  const freezeScreen = async (): Promise<{ folder: string; step: DraftStep } | null> => {
+    const route = currentRoute();
+    const here = { viewport: viewportNow(), theme: currentTheme() };
+    try {
+      // Strip our own chrome first: main photographs the real window, so the
+      // toolbar has to be off the glass while the marks stay on it.
+      await afterPaint();
+      const res = await invoke(CHANNELS.DEV_FEEDBACK_STEP, { draft: draftFolder, seq: screen, route });
+      if (!res.ok) throw new Error(res.error);
+      const step: DraftStep = { seq: screen, route, ...here, hasImage: true };
+      setDraftFolder(res.draft);
+      setSteps((prev) => [...prev, step]);
+      // Send uses what was just frozen straight away and cannot wait for state.
+      return { folder: res.draft, step };
+    } catch (err) {
+      console.error('[dev-feedback]', err);
+      say(t('devFeedback.stepFailed', { reason: reason(err) }), 6000);
+      return null;
+    }
+  };
+
+  /** Freezes this screen and folds the overlay away. Use the app, reopen, and
+   *  the screen you are on then is the next step. */
+  const nextScreen = useCallback(async () => {
+    if (sending) return;
+    setSending(true);
+    setEditingId(null);
+    setFlowOpen(false);
+    const frozen = await freezeScreen();
+    setSending(false);
+    if (frozen) collapse();
+    // freezeScreen closes over the current marks and screen; listing it as a
+    // dependency would rebuild this on every stroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sending, collapse, draftFolder, screen]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
@@ -194,17 +345,24 @@ export function FeedbackOverlay() {
         return;
       }
       if (e.key === 'Escape' && open) {
-        // One layer at a time: sketch pad → note → list → overlay, so a stray
-        // Escape never throws every mark away.
+        // One layer at a time: sketch pad → flow → note → picking → list →
+        // overlay, so a stray Escape never throws every mark away.
         if (sketchFor !== null) setSketchFor(null);
+        else if (flowOpen) setFlowOpen(false);
         else if (editingId !== null) setEditingId(null);
+        else if (mergeIds !== null) setMergeIds(null);
         else if (listOpen) setListOpen(false);
-        else close();
+        // The outermost Escape **folds**, it does not discard: minutes of work
+        // across several screens must not go to one keystroke. Anything drawn
+        // here is frozen first — unfrozen, those marks would lose the screen
+        // they belong to and reappear floating over somebody else's.
+        else if (marks.some((m) => m.parts.some((p) => p.screen === screen))) void nextScreen();
+        else collapse();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, editingId, listOpen, sketchFor, close]);
+  }, [open, editingId, listOpen, mergeIds, sketchFor, flowOpen, marks, screen, collapse, nextScreen]);
 
   useEffect(() => {
     // With the pad up, it is the subject — do not pull focus to the note box
@@ -237,40 +395,53 @@ export function FeedbackOverlay() {
     else setOpen(true);
   };
 
-  /** Adds a mark and opens its note straight away — pins and strokes come in
-   *  through the same door. */
-  const addMark = (mark: Omit<DraftMark, 'id' | 'memo' | 'target' | 'sketch'>) => {
+  /**
+   * Takes one new mark. **With a memo box open it joins that group; otherwise
+   * it starts a new one.** This is the only way to collect several drawings
+   * into one message, and it needs no mode switch — the open box is itself the
+   * sign that this group is listening.
+   */
+  const addPart = (part: MarkPart) => {
+    if (editingId !== null) {
+      setMarks((prev) => appendPart(prev, editingId, part));
+      return;
+    }
     const id = nextId.current++;
-    setMarks((prev) => [
-      ...prev,
-      { ...mark, id, memo: '', target: targetInBounds(mark.bounds), sketch: null },
-    ]);
+    setMarks((prev) => [...prev, { id, parts: [part], memo: '', sketch: null }]);
     setEditingId(id);
+  };
+
+  /** A pinned spot. The element is probed per mark, never for the group. */
+  const pinPart = (p: Point): MarkPart => {
+    const bounds = pinBounds(p);
+    return { kind: 'pin', shape: null, bounds, target: targetInBounds(bounds), screen };
   };
 
   // --- Pinning and drawing ---
   // Badges sit on the canvas too, so three things have to be told apart:
-  // pressing a badge (reopen its note), pressing empty space (pin), and
+  // pressing a badge (reopen its memo), pressing empty space (pin), and
   // dragging from there (draw). One rule decides: did the pointer travel
   // DRAG_SLOP from where it went down. The handle uses the same rule.
   const downRef = useRef<{ badgeId: number | null; x: number; y: number; moved: boolean } | null>(null);
 
   const onDrawDown = (e: React.PointerEvent) => {
-    if (editingId !== null) {
-      setEditingId(null);
-      return;
-    }
-    // The eraser makes no stroke, it picks one up. Badges come first: a pin has
-    // no stroke at all, and every badge sits on top of its own stroke.
+    // The eraser makes no stroke, it picks one up — **one mark**, not the whole
+    // group: a crooked box must not cost the sentence just typed.
     if (tool === 'eraser') {
-      const hit = badgeHit(marks, e.clientX, e.clientY) ?? eraserHit(marks, e.clientX, e.clientY);
-      if (hit !== null) setMarks((prev) => prev.filter((m) => m.id !== hit));
+      // Only this screen's marks: an earlier screen's are invisible here, so
+      // erasing one would be erasing a ghost.
+      const hit = partHit(marks, e.clientX, e.clientY, screen);
+      if (!hit) return;
+      // The last mark takes the group with it; close a memo box left pointing
+      // at nothing.
+      if (isLastPart(marks, hit.id) && editingId === hit.id) setEditingId(null);
+      setMarks((prev) => removePart(prev, hit.id, hit.part));
       return;
     }
     capturePointer(e.currentTarget, e.pointerId);
-    setHoverId(null);
+    setHover(null);
     downRef.current = {
-      badgeId: badgeHit(marks, e.clientX, e.clientY),
+      badgeId: badgeHit(marks, e.clientX, e.clientY, screen)?.id ?? null,
       x: e.clientX,
       y: e.clientY,
       moved: false,
@@ -280,10 +451,10 @@ export function FeedbackOverlay() {
 
   const onDrawMove = (e: React.PointerEvent) => {
     if (!draft) {
-      // Not drawing: preview the note under the cursor. Mouse only — touch has
+      // Not drawing: preview the memo under the cursor. Mouse only — touch has
       // no hover.
       if (e.pointerType === 'mouse' && editingId === null) {
-        setHoverId(badgeHit(marks, e.clientX, e.clientY));
+        setHover(badgeHit(marks, e.clientX, e.clientY, screen));
       }
       return;
     }
@@ -315,15 +486,14 @@ export function FeedbackOverlay() {
     if (!down) return;
 
     if (!down.moved) {
-      // A badge was tapped: reopen its note rather than adding a mark.
+      // A badge was tapped: reopen its memo. The badge is the group's handle,
+      // so any mark in the group opens the same one.
       if (down.badgeId != null) {
         setEditingId(down.badgeId);
         return;
       }
       // Empty space was tapped — "here". A position, with nothing drawn.
-      // Circling something small used to be the only way to point at it, and
-      // the wide ring made the probe find the wrapper instead of the control.
-      addMark({ kind: 'pin', shape: null, bounds: pinBounds({ x: down.x, y: down.y }) });
+      addPart(pinPart({ x: down.x, y: down.y }));
       return;
     }
 
@@ -332,128 +502,339 @@ export function FeedbackOverlay() {
     // intent of that gesture was "here" anyway.
     const bounds = shape ? boundsOfShape(shape) : null;
     if (!shape || !bounds || (bounds.width < MIN_STROKE && bounds.height < MIN_STROKE)) {
-      addMark({ kind: 'pin', shape: null, bounds: pinBounds({ x: down.x, y: down.y }) });
+      addPart(pinPart({ x: down.x, y: down.y }));
       return;
     }
-    addMark({ kind: 'shape', shape, bounds });
+    addPart({ kind: 'shape', shape, bounds, target: targetInBounds(bounds), screen });
+  };
+
+  /**
+   * Undo takes **one mark**: from the open group if there is one, else from the
+   * last group drawn on this screen. Taking the whole group would take the memo
+   * just typed with it.
+   */
+  const undoLastPart = () => {
+    const onHere = marks.filter((m) => m.parts.some((p) => p.screen === screen));
+    const targetId = editingId ?? onHere[onHere.length - 1]?.id;
+    if (targetId == null) return;
+    const target = marks.find((m) => m.id === targetId);
+    if (!target) return;
+    // The last mark **on this screen** — taking one from an earlier screen
+    // would contradict a picture already written.
+    const at = target.parts.map((p) => p.screen).lastIndexOf(screen);
+    if (at < 0) return;
+    if (isLastPart(marks, targetId)) setEditingId(null);
+    setMarks((prev) => removePart(prev, targetId, at));
+  };
+
+  /** Joins the groups picked in the list. One drawing per group, so only the
+   *  first survives — and that is said out loud, not swallowed. */
+  const applyMerge = () => {
+    if (!mergeIds || mergeIds.length < 2) return;
+    const result = mergeMarks(marks, mergeIds);
+    setMarks(result.marks);
+    setMergeIds(null);
+    setEditingId(null);
+    say(
+      result.droppedSketches > 0
+        ? t('devFeedback.group.mergedDropped')
+        : t('devFeedback.group.merged'),
+    );
   };
 
   const send = async () => {
     if (marks.length === 0 || sending) return;
-    setEditingId(null);
-    setListOpen(false);
-    setHoverId(null);
-    // `sending` also strips the overlay's own chrome: the main process
-    // screenshots the real window, so the toolbar has to be off the glass while
-    // the marks stay on it.
     setSending(true);
+    setEditingId(null);
+    setFlowOpen(false);
+    // Sending freezes the current screen first, down the same path as "next
+    // screen". A separate path for the last screen would be a bug that shows up
+    // only on the last screen.
+    //
+    // Unless **nothing was drawn here and screens are already collected**:
+    // coming to a screen and sending without marking it is common, and an empty
+    // screen tacked onto the end reads as the story ending somewhere it did not.
+    const drewHere = marks.some((m) => m.parts.some((p) => p.screen === screen));
+    let flow: DraftStep[] = steps;
+    let folder = draftFolder;
+    if (drewHere || steps.length === 0) {
+      const frozen = await freezeScreen();
+      if (!frozen) {
+        setSending(false);
+        return;
+      }
+      // What was just frozen has not reached state yet; splice it in by hand.
+      flow = [...steps, frozen.step];
+      folder = frozen.folder;
+    }
+    if (!folder) {
+      say(t('devFeedback.nothingCollected'));
+      setSending(false);
+      return;
+    }
     try {
-      await afterPaint();
       const res = await invoke(CHANNELS.DEV_FEEDBACK_SAVE, {
-        route: currentRoute(),
-        viewport: {
-          width: document.documentElement.clientWidth,
-          height: document.documentElement.clientHeight,
-        },
-        theme: currentTheme(),
+        draft: folder,
+        // The list order is the flow order. `seqs` is how main renames the
+        // pictures from capture order into flow order.
+        seqs: flow.map((s) => s.seq),
+        steps: flow.map((s) => ({
+          route: s.route,
+          viewport: s.viewport,
+          theme: s.theme,
+          hasImage: s.hasImage,
+        })),
         marks: marks.map((m) => ({
-          kind: m.kind,
           memo: m.memo,
-          bounds: m.bounds,
-          target: m.target,
           sketch: m.sketch,
+          // The stroke points do not go: the pictures already hold the drawing,
+          // and what an agent uses is the coordinates and the element. Screen
+          // identity is translated into flow position on the way out.
+          parts: m.parts.map((p) => ({
+            kind: p.kind,
+            bounds: p.bounds,
+            target: p.target,
+            step: flow.findIndex((s) => s.seq === p.screen) + 1,
+          })),
         })),
       });
       if (!res.ok) throw new Error(res.error);
-      setSaved(t('devFeedback.saved', { path: res.saved }));
-      close();
+      setSaved(
+        flow.some((s) => !s.hasImage)
+          ? t('devFeedback.savedPartial', { path: res.saved })
+          : t('devFeedback.saved', { path: res.saved }),
+      );
+      // It has been handed over, so the draft must not be discarded: close()
+      // would delete the folder that now holds the finished feedback.
+      setDraftFolder(null);
+      setMarks([]);
+      setSteps([]);
+      collapse();
       window.setTimeout(() => setSaved(null), 4000);
     } catch (err) {
       console.error('[dev-feedback]', err);
-      setSaved(t('devFeedback.saveFailed'));
-      window.setTimeout(() => setSaved(null), 4000);
+      // The draft is still on disk after a failure — say so, so the user knows
+      // pressing send again is worth it.
+      say(t('devFeedback.saveFailed', { reason: reason(err) }), 6000);
     } finally {
       setSending(false);
     }
   };
 
   const editing = marks.find((m) => m.id === editingId) ?? null;
-  const bubble = editing ? bubblePosition(editing.bounds, dock) : null;
+  // The memo box hangs off the group's **first mark on this screen**. Following
+  // the newest mark would move the box out from under the hand mid-sentence,
+  // and a group reopened from an earlier screen would put it over nothing.
+  const editingHere = editing ? (partsOnScreen(editing, screen)[0] ?? null) : null;
+  const bubble = editingHere ? bubblePosition(editingHere.bounds, dock) : null;
 
   // With the note box open the preview is folded away — the same information
   // does not go in two places.
-  const hovered = editingId === null ? (marks.find((m) => m.id === hoverId) ?? null) : null;
-  const hover = hovered
-    ? {
-        text: hovered.memo.trim() || t('devFeedback.noMemo'),
-        top: Math.max(4, badgeCenter(hovered.bounds).y - BADGE_RADIUS - 28),
-        left: clamp(
-          badgeCenter(hovered.bounds).x - BADGE_RADIUS,
-          8,
-          Math.max(8, document.documentElement.clientWidth - 268),
-        ),
-        maxWidth: Math.min(260, document.documentElement.clientWidth - 16),
-      }
-    : null;
+  const hoveredMark = editingId === null && hover ? (marks.find((m) => m.id === hover.id) ?? null) : null;
+  const hoveredBounds = hoveredMark?.parts[hover?.part ?? 0]?.bounds ?? null;
+  const preview =
+    hoveredMark && hoveredBounds
+      ? {
+          text: hoveredMark.memo.trim() || t('devFeedback.noMemo'),
+          top: Math.max(4, badgeCenter(hoveredBounds).y - BADGE_RADIUS - 28),
+          left: clamp(
+            badgeCenter(hoveredBounds).x - BADGE_RADIUS,
+            8,
+            Math.max(8, document.documentElement.clientWidth - 268),
+          ),
+          maxWidth: Math.min(260, document.documentElement.clientWidth - 16),
+        }
+      : null;
 
-  // Past a couple of marks, a list beats checking badges one at a time.
+  /** "Where did this point" for one list row — the group's first mark stands in. */
+  const whereOf = (mark: DraftMark): string => {
+    const target = mark.parts[0].target;
+    return target?.components[0] ?? target?.tag ?? t('devFeedback.emptySpot');
+  };
+
+  const listBtn =
+    'rounded-md px-2 py-1 text-[11px] font-medium text-card-foreground hover:bg-muted disabled:opacity-40';
+  // Past a couple of groups, a list beats checking badges one at a time. It is
+  // also where grouping-after-the-fact happens.
   const memoList =
     listOpen && marks.length > 0 ? (
       <div
         data-testid="dev-feedback-list"
-        className="pointer-events-auto max-h-52 w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-card/95 p-1 text-card-foreground shadow-lg backdrop-blur-sm"
+        className="pointer-events-auto w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-border bg-card/95 text-card-foreground shadow-lg backdrop-blur-sm"
       >
-        {marks.map((m, i) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => {
-              setListOpen(false);
-              setHoverId(null);
-              setEditingId(m.id);
-            }}
-            className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
-          >
-            <span className="mt-px shrink-0 text-xs font-semibold" style={{ color: MARK_COLOR }}>
-              {markLabel(i)}
-            </span>
-            <span className="min-w-0 flex-1 text-xs">
-              {m.memo.trim() || <span className="text-muted-foreground">{t('devFeedback.noMemo')}</span>}
-              {m.sketch ? (
-                <span className="ml-1 text-[10px] text-success">{t('devFeedback.sketch.has')}</span>
-              ) : null}
-            </span>
-            <span className="mt-px shrink-0 text-[10px] text-muted-foreground">
-              {m.target?.components[0] ?? m.target?.tag ?? t('devFeedback.emptySpot')}
-            </span>
-          </button>
-        ))}
+        {mergeIds ? (
+          <p className="px-2.5 pt-2 text-[11px] text-muted-foreground">
+            {t('devFeedback.group.mergePrompt')}
+          </p>
+        ) : null}
+        <div className="max-h-52 overflow-y-auto p-1">
+          {marks.map((m, i) => {
+            const picked = mergeIds?.includes(m.id) ?? false;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  if (mergeIds) {
+                    setMergeIds(picked ? mergeIds.filter((id) => id !== m.id) : [...mergeIds, m.id]);
+                    return;
+                  }
+                  setListOpen(false);
+                  setHover(null);
+                  setEditingId(m.id);
+                }}
+                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+              >
+                {mergeIds ? (
+                  <span
+                    aria-hidden
+                    className="mt-px shrink-0 text-xs"
+                    style={{ color: picked ? MARK_COLOR : undefined }}
+                  >
+                    {picked ? '◉' : '○'}
+                  </span>
+                ) : null}
+                <span className="mt-px shrink-0 text-xs font-semibold" style={{ color: MARK_COLOR }}>
+                  {markLabel(i)}
+                </span>
+                <span className="min-w-0 flex-1 text-xs">
+                  {m.memo.trim() || <span className="text-muted-foreground">{t('devFeedback.noMemo')}</span>}
+                  {m.parts.length > 1 ? (
+                    <span className="ml-1 text-[10px] text-muted-foreground">
+                      {t('devFeedback.group.parts', { n: m.parts.length })}
+                    </span>
+                  ) : null}
+                  {/* A group that spans screens has to say so here — with one
+                      badge visible and "3 marks" written, the other two are
+                      unfindable. */}
+                  {screenSpan(m) > 1 ? (
+                    <span className="ml-1 text-[10px]" style={{ color: MARK_COLOR }}>
+                      {t('devFeedback.group.screens', { n: screenSpan(m) })}
+                    </span>
+                  ) : null}
+                  {m.sketch ? (
+                    <span className="ml-1 text-[10px] text-success">{t('devFeedback.sketch.has')}</span>
+                  ) : null}
+                </span>
+                <span className="mt-px shrink-0 text-[10px] text-muted-foreground">{whereOf(m)}</span>
+              </button>
+            );
+          })}
+        </div>
+        {marks.length > 1 ? (
+          <div className="flex items-center gap-1 border-t border-border px-1.5 py-1">
+            {mergeIds ? (
+              <>
+                <button type="button" className={listBtn} onClick={() => setMergeIds(null)}>
+                  {t('devFeedback.close')}
+                </button>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  data-testid="dev-feedback-merge-apply"
+                  className={listBtn}
+                  disabled={mergeIds.length < 2}
+                  onClick={applyMerge}
+                  style={mergeIds.length >= 2 ? { color: MARK_COLOR } : undefined}
+                >
+                  {mergeIds.length >= 2
+                    ? t('devFeedback.group.mergeCount', { n: mergeIds.length })
+                    : t('devFeedback.group.merge')}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className={listBtn}
+                onClick={() => {
+                  setMergeIds([]);
+                  setEditingId(null);
+                }}
+              >
+                {t('devFeedback.group.mergeStart')}
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     ) : null;
 
   const barSide = dock === 'top' ? 'top-0' : 'bottom-0';
   const btn =
     'rounded-md px-2.5 py-1.5 text-xs font-medium text-card-foreground hover:bg-muted disabled:opacity-40';
+  const hintClass = 'rounded-full bg-card/90 px-2 py-0.5 text-[11px] text-muted-foreground';
+  // A group reopened from the list has no mark on this screen yet, so its memo
+  // box has nothing to hang off and does not appear. Without a word here, the
+  // list tap looks like it did nothing at all — this line is the receipt, and
+  // it says what to do next. It outranks the flow line because it answers a
+  // question the user asked half a second ago.
+  //
+  // Being mid-flow comes next: not knowing which screen you are on, you cannot
+  // tell whether "next screen" even registered.
+  //
+  // `live` marks the two that answer something the user just did; they are
+  // drawn in the mark colour so they read as a response rather than standing
+  // advice.
+  const hint: { text: string; live: boolean } | null = notice
+    ? { text: notice, live: true }
+    : editing && !editingHere
+      ? {
+          text: t('devFeedback.group.continue', {
+            label: markLabel(marks.findIndex((m) => m.id === editing.id)),
+          }),
+          live: true,
+        }
+      : steps.length > 0
+        ? { text: t('devFeedback.flow.onScreen', { n: steps.length + 1, prev: steps.length }), live: false }
+        : marks.length === 0
+          ? { text: t('devFeedback.hint'), live: false }
+          : null;
+  const hintLine = hint ? (
+    <span
+      data-testid="dev-feedback-hint"
+      className={hintClass}
+      style={hint.live ? { color: MARK_COLOR } : undefined}
+    >
+      {hint.text}
+    </span>
+  ) : null;
   const toolStrip = (
     <ToolStrip tool={tool} onTool={setTool} color={color} onColor={setColor} width={width} onWidth={setWidth} />
   );
   const sketching = sketchFor !== null ? (marks.find((m) => m.id === sketchFor) ?? null) : null;
 
   if (!open) {
+    // Mid-flow the handle stops being faint. Forgetting there is a round open
+    // and closing the app would throw all of it away.
+    const handleFade =
+      steps.length > 0 ? 'opacity-100' : 'opacity-30 hover:opacity-100 active:opacity-100';
     return (
       <div {...{ [FEEDBACK_ATTR]: '' }} className="pointer-events-none fixed inset-0 z-[200]">
         <button
           type="button"
           data-testid="dev-feedback-handle"
-          aria-label={t('devFeedback.open')}
+          aria-label={
+            steps.length > 0 ? t('devFeedback.flow.resume', { n: steps.length }) : t('devFeedback.open')
+          }
           onPointerDown={onHandleDown}
           onPointerMove={onHandleMove}
           onPointerUp={onHandleUp}
           style={{ top: `${handleTop}%` }}
-          className="pointer-events-auto absolute right-0 flex h-24 w-5 -translate-y-1/2 touch-none items-center justify-end opacity-30 hover:opacity-100 active:opacity-100"
+          className={`pointer-events-auto absolute right-0 flex h-24 w-5 -translate-y-1/2 touch-none items-center justify-end ${handleFade}`}
         >
           <span className="h-16 w-1.5 rounded-l-full bg-primary" />
         </button>
+        {/* Progress while folded away. Beside the handle, so it stays in the
+            corner of the eye the whole time the app is being used. */}
+        {steps.length > 0 ? (
+          <div
+            data-testid="dev-feedback-progress"
+            style={{ top: `${handleTop}%` }}
+            className="pointer-events-none absolute right-3 -translate-y-1/2 rounded-full border border-border bg-card px-2 py-1 text-[11px] font-medium text-card-foreground shadow-lg"
+          >
+            {t('devFeedback.flow.progress', { screens: steps.length, marks: marks.length })}
+          </div>
+        ) : null}
         {saved ? (
           <div className="pointer-events-none absolute right-4 top-1/2 max-w-[70vw] -translate-y-1/2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-card-foreground shadow-lg">
             {saved}
@@ -470,14 +851,17 @@ export function FeedbackOverlay() {
       <svg
         data-testid="dev-feedback-canvas"
         className="absolute inset-0 h-full w-full touch-none"
-        style={{ cursor: hoverId !== null ? 'pointer' : 'crosshair' }}
+        style={{ cursor: hover !== null ? 'pointer' : 'crosshair' }}
         onPointerDown={onDrawDown}
         onPointerMove={onDrawMove}
         onPointerUp={onDrawUp}
         onPointerCancel={onDrawUp}
-        onPointerLeave={() => setHoverId(null)}
+        onPointerLeave={() => setHover(null)}
       >
-        {[...marks.map((m) => m.shape), draft].map((shape, si) =>
+        {/* Strokes — **this screen's only**. An earlier screen's are already
+            baked into their own picture, and their coordinates belong to that
+            viewport, so drawing them here would be graffiti. */}
+        {[...marks.flatMap((m) => partsOnScreen(m, screen).map((p) => p.shape)), draft].map((shape, si) =>
           shape
             ? polylinesOf(shape).map((line, li) => (
                 <g key={`s-${si}-${li}`}>
@@ -501,74 +885,76 @@ export function FeedbackOverlay() {
               ))
             : null,
         )}
-        {marks.map((m, i) => {
-          const c = badgeCenter(m.bounds);
-          const active = hoverId === m.id || editingId === m.id;
-          return (
-            <g key={`badge-${m.id}`}>
-              {/* The tell that it can be reopened. `badgeHit` does the judging. */}
-              {active ? <circle cx={c.x} cy={c.y} r={BADGE_RADIUS + 4} fill={MARK_COLOR} opacity={0.25} /> : null}
-              {/* A pin has no stroke, so only its badge shows — the ring around
-                  it says "this one point". */}
-              {m.kind === 'pin' ? (
-                <>
-                  <circle cx={c.x} cy={c.y} r={BADGE_RADIUS + 5} fill="none" stroke={MARK_HALO} strokeWidth={4} />
-                  <circle cx={c.x} cy={c.y} r={BADGE_RADIUS + 5} fill="none" stroke={MARK_COLOR} strokeWidth={2} />
-                </>
-              ) : null}
-              <circle cx={c.x} cy={c.y} r={BADGE_RADIUS} fill={MARK_COLOR} stroke={MARK_HALO} strokeWidth={2} />
-              <text
-                x={c.x}
-                y={c.y + 1}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontSize={13}
-                fill="#ffffff"
-              >
-                {markLabel(i)}
-              </text>
-              {/* A dot on the badge's shoulder when a drawing is attached, so
-                  you can see which mark has one without opening the list. */}
-              {m.sketch ? (
-                <circle
-                  cx={c.x + BADGE_RADIUS - 1}
-                  cy={c.y - BADGE_RADIUS + 1}
-                  r={4}
-                  fill={SKETCH_BADGE_COLOR}
-                  stroke={MARK_HALO}
-                  strokeWidth={1.5}
-                />
-              ) : null}
-            </g>
-          );
-        })}
+        {/* Badges — every mark in a group wears **the same number**. Three ①
+            on screen mean those three are one story, and any of them opens the
+            same memo. */}
+        {marks.map((m, i) =>
+          partsOnScreen(m, screen).map((part, pi) => {
+            const c = badgeCenter(part.bounds);
+            const active = hover?.id === m.id || editingId === m.id;
+            return (
+              <g key={`badge-${m.id}-${pi}`}>
+                {/* The tell that it can be reopened. Lit for the whole group, so
+                    which strokes are one family is visible too. */}
+                {active ? <circle cx={c.x} cy={c.y} r={BADGE_RADIUS + 4} fill={MARK_COLOR} opacity={0.25} /> : null}
+                {/* A pin has no stroke, so only its badge shows — the ring around
+                    it says "this one point". */}
+                {part.kind === 'pin' ? (
+                  <>
+                    <circle cx={c.x} cy={c.y} r={BADGE_RADIUS + 5} fill="none" stroke={MARK_HALO} strokeWidth={4} />
+                    <circle cx={c.x} cy={c.y} r={BADGE_RADIUS + 5} fill="none" stroke={MARK_COLOR} strokeWidth={2} />
+                  </>
+                ) : null}
+                <circle cx={c.x} cy={c.y} r={BADGE_RADIUS} fill={MARK_COLOR} stroke={MARK_HALO} strokeWidth={2} />
+                <text
+                  x={c.x}
+                  y={c.y + 1}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={13}
+                  fill="#ffffff"
+                >
+                  {markLabel(i)}
+                </text>
+                {/* A dot on the first badge's shoulder when a drawing is
+                    attached. One drawing per group, so it is not repeated. */}
+                {m.sketch && pi === 0 ? (
+                  <circle
+                    cx={c.x + BADGE_RADIUS - 1}
+                    cy={c.y - BADGE_RADIUS + 1}
+                    r={4}
+                    fill={SKETCH_BADGE_COLOR}
+                    stroke={MARK_HALO}
+                    strokeWidth={1.5}
+                  />
+                ) : null}
+              </g>
+            );
+          }),
+        )}
       </svg>
 
       {/* Preview over a badge — check what a mark says without opening it. */}
-      {hover && !sending ? (
+      {preview && !sending ? (
         <div
-          style={{ top: hover.top, left: hover.left, maxWidth: hover.maxWidth }}
+          style={{ top: preview.top, left: preview.left, maxWidth: preview.maxWidth }}
           className="pointer-events-none absolute rounded-md bg-foreground px-2 py-1 text-[11px] text-background shadow-lg"
         >
-          {hover.text}
+          {preview.text}
         </div>
       ) : null}
 
       {/* The toolbar. A full-width bar would make that whole strip un-markable,
           so it is a centred pill with the sides left clear for the canvas; if
           the pill covers the thing you need to point at, flip it.
-          It goes entirely while the sketch pad is up (hidden but present, its
-          buttons would still take tab focus and duplicate the pad's own) and
-          while sending (the window is being photographed). */}
-      {sketching || sending ? null : (
+          It goes entirely while the sketch pad or the flow is up (hidden but
+          present, its buttons would still take tab focus) and while a screen is
+          being photographed. */}
+      {sketching || flowOpen || sending ? null : (
         <div className={`pointer-events-none absolute inset-x-0 ${barSide} flex flex-col items-center gap-1 p-2`}>
           {dock === 'bottom' ? (
             <>
-              {marks.length === 0 ? (
-                <span className="rounded-full bg-card/90 px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {t('devFeedback.hint')}
-                </span>
-              ) : null}
+              {hintLine}
               {memoList}
               {toolStrip}
             </>
@@ -587,27 +973,57 @@ export function FeedbackOverlay() {
             </button>
             <button
               type="button"
+              data-testid="dev-feedback-list-toggle"
               className={btn}
               disabled={marks.length === 0}
               onClick={() => {
                 setListOpen((v) => !v);
                 setEditingId(null);
+                setMergeIds(null);
               }}
             >
               {t('devFeedback.list')}
             </button>
             <button
               type="button"
+              data-testid="dev-feedback-undo"
               className={btn}
               disabled={marks.length === 0}
-              onClick={() => {
-                setMarks((prev) => prev.slice(0, -1));
-                setEditingId(null);
-              }}
+              onClick={undoLastPart}
             >
               {t('devFeedback.undo')}
             </button>
-            <button type="button" className={btn} onClick={close}>
+            {/* Editing the flow only means something once a screen is frozen. */}
+            {steps.length > 0 ? (
+              <button
+                type="button"
+                data-testid="dev-feedback-flow-open"
+                className={btn}
+                onClick={() => {
+                  setFlowOpen(true);
+                  setEditingId(null);
+                  setListOpen(false);
+                }}
+              >
+                {t('devFeedback.flowCount', { n: steps.length })}
+              </button>
+            ) : null}
+            {/*
+              "Next screen" — freeze this screen as a picture and fold away.
+              Use the app, reopen the handle, and the screen you are on then is
+              the next step. This button is the moment of freezing before
+              leaving, which is what keeps coordinates from leaking across.
+            */}
+            <button
+              type="button"
+              data-testid="dev-feedback-next-screen"
+              className={btn}
+              disabled={sending}
+              onClick={nextScreen}
+            >
+              {t('devFeedback.nextScreen')}
+            </button>
+            <button type="button" data-testid="dev-feedback-close" className={btn} onClick={close}>
               {t('devFeedback.close')}
             </button>
             <button
@@ -624,19 +1040,15 @@ export function FeedbackOverlay() {
             <>
               {toolStrip}
               {memoList}
-              {marks.length === 0 ? (
-                <span className="rounded-full bg-card/90 px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {t('devFeedback.hint')}
-                </span>
-              ) : null}
+              {hintLine}
             </>
           ) : null}
         </div>
       )}
 
-      {/* The note box for a mark. Struck behind the sketch pad, and while
-          sending, for the same reasons as the toolbar. */}
-      {editing && bubble && !sketching && !sending ? (
+      {/* The memo box for a group. Struck behind the sketch pad and the flow,
+          and while a screen is being photographed. */}
+      {editing && bubble && !sketching && !flowOpen && !sending ? (
         <div
           style={{ top: bubble.top, left: bubble.left, width: bubble.width }}
           className="absolute rounded-lg border border-border bg-card p-2.5 text-card-foreground shadow-lg"
@@ -646,7 +1058,15 @@ export function FeedbackOverlay() {
               {markLabel(marks.findIndex((m) => m.id === editing.id))}
             </span>
             <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-              {editing.target?.components[0] ?? editing.target?.tag ?? t('devFeedback.emptySpot')}
+              {whereOf(editing)}
+              {editing.parts.length > 1
+                ? ` · ${t('devFeedback.group.parts', { n: editing.parts.length })}`
+                : ''}
+              {/* Marks of this group on other screens are invisible from here;
+                  unsaid, "split" and "delete" would act on more than is shown. */}
+              {screenSpan(editing) > 1
+                ? ` · ${t('devFeedback.group.screens', { n: screenSpan(editing) })}`
+                : ''}
             </span>
           </div>
           <input
@@ -665,6 +1085,9 @@ export function FeedbackOverlay() {
             }}
             className="w-full rounded-md border border-input bg-card px-2 py-1.5 text-sm outline-none focus:border-primary"
           />
+          {/* The one rule this tool adds. Anywhere but inside the box the user
+              is already looking at, nobody reads it. */}
+          <p className="mt-1 text-[11px] text-muted-foreground">{t('devFeedback.group.hint')}</p>
           <div className="mt-1.5 flex items-center gap-1">
             {/* What words cannot carry, a drawing can. It sits next to the note
                 because the two are one request in two forms. */}
@@ -676,6 +1099,21 @@ export function FeedbackOverlay() {
             >
               {editing.sketch ? t('devFeedback.sketch.edit') : t('devFeedback.sketch.add')}
             </button>
+            {/* The way back out of a wrong grouping. With grouping but no
+                splitting, a mistake costs the user everything they drew. */}
+            {editing.parts.length > 1 ? (
+              <button
+                type="button"
+                data-testid="dev-feedback-split"
+                className={btn}
+                onClick={() => {
+                  setMarks((prev) => splitMark(prev, editing.id, () => nextId.current++));
+                  setEditingId(null);
+                }}
+              >
+                {t('devFeedback.group.split')}
+              </button>
+            ) : null}
             <span className="flex-1" />
             <button
               type="button"
@@ -704,6 +1142,30 @@ export function FeedbackOverlay() {
             setMarks((prev) => prev.map((m) => (m.id === sketching.id ? { ...m, sketch: dataUrl } : m)));
             setSketchFor(null);
           }}
+        />
+      ) : null}
+
+      {/* Editing the flow — same slot as the sketch pad (both cover drawing). */}
+      {flowOpen && !sketching ? (
+        <FlowModal
+          steps={steps}
+          marks={marks}
+          current={{ route: currentRoute(), screen }}
+          onMove={(index, delta) => setSteps((prev) => moveStep(prev, index, delta))}
+          onRemove={(index) => {
+            const next = removeStep(steps, marks, index);
+            setSteps(next.steps);
+            setMarks(next.marks);
+            // Groups disappear with the screen, so this is never passed over
+            // in silence.
+            const lost = marks.length - next.marks.length;
+            say(
+              lost > 0
+                ? t('devFeedback.flow.removedWithMarks', { n: lost })
+                : t('devFeedback.flow.removed'),
+            );
+          }}
+          onClose={() => setFlowOpen(false)}
         />
       ) : null}
     </div>

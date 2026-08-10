@@ -19,9 +19,8 @@ export type Shape = {
   width: number;
 };
 
-/** A mark being edited on screen, not yet saved. */
-export type DraftMark = {
-  id: number;
+/** One mark inside a group — a stroke (or a pinned spot) and what was under it. */
+export type MarkPart = {
   /** A tapped position (pin) or a drawn stroke (shape). The gesture decides. */
   kind: 'pin' | 'shape';
   /** Null for a pin — it has a position and nothing drawn. */
@@ -29,9 +28,52 @@ export type DraftMark = {
   /** Viewport coordinates. The screen is frozen while marking, so these line
    *  up with the screenshot the main process takes. */
   bounds: FeedbackRect;
-  memo: string;
   target: FeedbackTarget | null;
-  /** "This is how it should look" — a PNG data URL from the sketch pad. */
+  /**
+   * Which **screen** it was drawn on — a `DraftStep.seq`.
+   *
+   * The screen's identity, not its position in the flow: reordering then costs
+   * nothing, because the position can be counted from the list. The
+   * coordinates are in **that screen's viewport**, so without this a mark from
+   * screen A lands at an unrelated spot on screen B.
+   */
+  screen: number;
+};
+
+/**
+ * One leg of the flow = one screen. Added each time "next screen" freezes one.
+ *
+ * `seq` is the **capture order** (the draft's `screen-N.png`) and never
+ * changes; the position in the array is the **flow order**. Keeping them apart
+ * is what makes reordering shuffle an array instead of moving files already
+ * written to disk.
+ */
+export type DraftStep = {
+  seq: number;
+  route: string;
+  viewport: { width: number; height: number };
+  theme: 'light' | 'dark' | null;
+  /** False when the capture failed. The coordinates and elements still stand,
+   *  so the feedback is not lost with it. */
+  hasImage: boolean;
+};
+
+/**
+ * A group being edited on screen, not yet saved.
+ *
+ * Why a group and not a single mark: an arrow, a box and a pin are often one
+ * request. Asked for a memo per mark, the user writes the same sentence three
+ * times — or two of them land with no memo and nobody can tell what they meant.
+ * The element is captured per mark, never for the group: one rectangle around
+ * the whole group measures the huge wrapper between the marks.
+ */
+export type DraftMark = {
+  id: number;
+  /** The marks in this group. At least one — an empty group deletes itself. */
+  parts: MarkPart[];
+  memo: string;
+  /** "This is how it should look" — a PNG data URL from the sketch pad. One
+   *  per group, because a group is one request. */
   sketch: string | null;
 };
 

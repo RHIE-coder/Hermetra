@@ -10,7 +10,7 @@
 // single undo, and two copies of the same stroke code.
 import { useRef, useState } from 'react';
 import { useT } from '@/lib/i18n';
-import { polylinesOf, strokeShapes, svgPath, eraserHit } from './draw';
+import { polylinesOf, strokeShapes, svgPath, strokeHit } from './draw';
 import { ToolStrip } from './tool-strip';
 import {
   MARK_COLOR,
@@ -65,7 +65,7 @@ export function SketchPad({
   const onDown = (e: React.PointerEvent) => {
     const p = local(e);
     if (tool === 'eraser') {
-      const hit = eraserHit(placed, p.x, p.y);
+      const hit = strokeHit(placed, p.x, p.y);
       if (hit !== null) setPlaced((prev) => prev.filter((s) => s.id !== hit));
       return;
     }

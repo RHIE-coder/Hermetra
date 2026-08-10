@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { boundsOfPoints, boundsOfShape, eraserHit, polylinesOf, shapeContains, svgPath } from './draw';
+import { boundsOfPoints, boundsOfShape, partHit, polylinesOf, shapeContains, strokeHit, svgPath } from './draw';
 import type { Shape } from './types';
 
 /**
@@ -153,7 +153,7 @@ describe('svgPath', () => {
   });
 });
 
-describe('shapeContains · eraserHit — what the eraser picks up', () => {
+describe('shapeContains · strokeHit — what the sketch pad eraser picks up', () => {
   const line = shape({
     tool: 'line',
     points: [
@@ -177,39 +177,60 @@ describe('shapeContains · eraserHit — what the eraser picks up', () => {
   // Under "the later stroke wins", one thick stroke would make the thin one
   // beneath it permanently unerasable.
   it('overlapping strokes: the nearer one is picked, not the later one', () => {
-    const marks = [
-      {
-        id: 1,
-        shape: shape({
-          tool: 'line',
-          points: [
-            { x: 0, y: 0 },
-            { x: 100, y: 0 },
-          ],
-          width: 2,
-        }),
-      },
-      {
-        id: 2,
-        shape: shape({
-          tool: 'line',
-          points: [
-            { x: 0, y: 20 },
-            { x: 100, y: 20 },
-          ],
-          width: 6,
-        }),
-      },
+    const strokes = [
+      { id: 1, shape: shape({ tool: 'line', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], width: 2 }) },
+      { id: 2, shape: shape({ tool: 'line', points: [{ x: 0, y: 20 }, { x: 100, y: 20 }], width: 6 }) },
     ];
-    expect(eraserHit(marks, 50, 1)).toBe(1);
-    expect(eraserHit(marks, 50, 19)).toBe(2);
-  });
-
-  it('a pin has no stroke, so the eraser test skips it (its badge answers instead)', () => {
-    expect(eraserHit([{ id: 9, shape: null }], 0, 0)).toBeNull();
+    expect(strokeHit(strokes, 50, 1)).toBe(1);
+    expect(strokeHit(strokes, 50, 19)).toBe(2);
   });
 
   it('nothing under the cursor is null', () => {
-    expect(eraserHit([{ id: 1, shape: line }], 500, 500)).toBeNull();
+    expect(strokeHit([{ id: 1, shape: line }], 500, 500)).toBeNull();
+  });
+});
+
+describe('partHit — the on-screen eraser takes one mark, not the message', () => {
+  const stroke = (y: number, width = 3) =>
+    shape({ tool: 'line', points: [{ x: 0, y }, { x: 100, y }], width });
+  const part = (over: Record<string, unknown>) => ({
+    shape: null,
+    bounds: { x: 0, y: 0, width: 0, height: 0 },
+    screen: 1,
+    ...over,
+  });
+
+  it('names the group and which of its marks was touched', () => {
+    const marks = [
+      { id: 1, parts: [part({ shape: stroke(0) }), part({ shape: stroke(50) })] },
+      { id: 2, parts: [part({ shape: stroke(200) })] },
+    ];
+    expect(partHit(marks, 50, 50)).toEqual({ id: 1, part: 1 });
+    expect(partHit(marks, 50, 200)).toEqual({ id: 2, part: 0 });
+    expect(partHit(marks, 50, 400)).toBeNull();
+  });
+
+  // A pin draws no stroke at all — its badge circle is the only thing to grab.
+  it('catches a pin by its badge', () => {
+    const pin = [{ id: 5, parts: [part({ bounds: { x: 100, y: 100, width: 22, height: 22 } })] }];
+    expect(partHit(pin, 111, 111)).toEqual({ id: 5, part: 0 });
+    expect(partHit(pin, 300, 300)).toBeNull();
+  });
+
+  it('overlapping marks: the nearer one is picked', () => {
+    const marks = [
+      { id: 1, parts: [part({ shape: stroke(0, 2) })] },
+      { id: 2, parts: [part({ shape: stroke(20, 6) })] },
+    ];
+    expect(partHit(marks, 50, 1)).toEqual({ id: 1, part: 0 });
+    expect(partHit(marks, 50, 19)).toEqual({ id: 2, part: 0 });
+  });
+
+  // A mark from an earlier screen is invisible here; erasing it would be
+  // erasing a ghost, at coordinates belonging to another viewport.
+  it('ignores marks belonging to another screen', () => {
+    const marks = [{ id: 1, parts: [part({ shape: stroke(0), screen: 1 })] }];
+    expect(partHit(marks, 50, 0, 1)).toEqual({ id: 1, part: 0 });
+    expect(partHit(marks, 50, 0, 2)).toBeNull();
   });
 });

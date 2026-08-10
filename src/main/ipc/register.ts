@@ -20,7 +20,7 @@ import { myDevicesService } from '../services/myDevices';
 import { connectionsService } from '../services/connections';
 import { appleCertsService } from '../services/appleCerts';
 import { BrowserInstaller } from '../services/browserInstall';
-import { saveFeedback } from '../services/devFeedback';
+import { discardDraft, finishFeedback, saveDraftStep } from '../services/devFeedback';
 import type { Workspace } from '@shared/types/workspace';
 
 export function registerIpc(getWindow: () => BrowserWindow | null) {
@@ -306,19 +306,20 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   // Absent from a packaged app entirely: it writes into the repo with no
   // guard, and the overlay that calls it is compiled out of a prod renderer.
   if (!app.isPackaged) {
-    ipcMain.handle(CHANNELS.DEV_FEEDBACK_SAVE, (_e, raw) =>
-      saveFeedback(raw, {
-        // The window screenshots itself. The renderer hides its own toolbars
-        // before invoking and leaves the marks up, so what lands in shot.png
-        // is pixel-for-pixel what the user was looking at — no DOM cloning,
-        // no scroll or sticky corrections to get wrong.
-        capture: async () => {
-          const win = getWindow();
-          if (!win || win.isDestroyed()) return null;
-          const image = await win.webContents.capturePage();
-          return image.isEmpty() ? null : image.toDataURL();
-        },
-      }),
-    );
+    // The window screenshots itself. The renderer hides its own toolbars
+    // before invoking and leaves the marks up, so what lands in the picture is
+    // pixel-for-pixel what the user was looking at — no DOM cloning, no scroll
+    // or sticky corrections to get wrong.
+    const capture = async () => {
+      const win = getWindow();
+      if (!win || win.isDestroyed()) return null;
+      const image = await win.webContents.capturePage();
+      return image.isEmpty() ? null : image.toDataURL();
+    };
+    // A round is collected screen by screen: STEP freezes the screen the user
+    // is about to leave, SAVE ends the round, DISCARD throws it away.
+    ipcMain.handle(CHANNELS.DEV_FEEDBACK_STEP, (_e, raw) => saveDraftStep(raw, { capture }));
+    ipcMain.handle(CHANNELS.DEV_FEEDBACK_SAVE, (_e, raw) => finishFeedback(raw));
+    ipcMain.handle(CHANNELS.DEV_FEEDBACK_DISCARD, (_e, raw) => discardDraft(raw));
   }
 }

@@ -28,7 +28,12 @@ import type {
   InspectorElement,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
-import type { FeedbackRequest, FeedbackSaveResult } from '../dev-feedback';
+import type {
+  FeedbackRequest,
+  FeedbackSaveResult,
+  FeedbackStepRequest,
+  FeedbackStepResult,
+} from '../dev-feedback';
 import type {
   BridgeEvent,
   BusVar,
@@ -149,8 +154,11 @@ export const CHANNELS = {
   BROWSER_INSTALL_RUN: 'browser:install:run',
 
   // Dev-only screen feedback. Registered only in an unpackaged app — the
-  // handler writes into the repo and has no business in a shipped build.
+  // handlers write into the repo and have no business in a shipped build.
+  // A round is collected screen by screen (STEP) and ends in SAVE or DISCARD.
+  DEV_FEEDBACK_STEP: 'dev:feedback:step',
   DEV_FEEDBACK_SAVE: 'dev:feedback:save',
+  DEV_FEEDBACK_DISCARD: 'dev:feedback:discard',
 
   // Subscriptions (main → renderer)
   EVT_BRIDGE_EVENT: 'evt:bridge:event',
@@ -273,7 +281,9 @@ export interface IpcContract {
   [CHANNELS.BROWSER_INSTALL_STATE]: { input: void; output: BrowserInstallState };
   [CHANNELS.BROWSER_INSTALL_RUN]: { input: void; output: { started: boolean } };
 
+  [CHANNELS.DEV_FEEDBACK_STEP]: { input: FeedbackStepRequest; output: FeedbackStepResult };
   [CHANNELS.DEV_FEEDBACK_SAVE]: { input: FeedbackRequest; output: FeedbackSaveResult };
+  [CHANNELS.DEV_FEEDBACK_DISCARD]: { input: { draft: string }; output: { ok: boolean } };
 }
 
 export type RequestOf<C extends ChannelName> = IpcContract[C]['input'];

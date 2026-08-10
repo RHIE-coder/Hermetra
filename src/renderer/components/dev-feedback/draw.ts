@@ -5,6 +5,7 @@
 // its own coordinates, what the user saw and what got saved would drift apart,
 // and that drift is invisible until after it has been sent. So every tool is
 // expressed as one set of polylines and both places read this function.
+import { badgeContains, type FeedbackRect } from '@shared/dev-feedback';
 import { MARK_HALO, type Point, type Shape } from './types';
 
 /** Arrowhead length — it has to grow with the stroke or it drowns in it. */
@@ -131,25 +132,60 @@ export function shapeContains(shape: Shape, x: number, y: number, slack = 8): nu
 }
 
 /**
- * Id of the mark the eraser picks up. When strokes overlap the **nearer** one
- * wins — "the later one wins" would let a thick stroke make the thin one under
- * it permanently unerasable.
- * A pin has no stroke; `badgeHit` answers for those.
+ * Eraser test where there are only strokes (the sketch pad): the id of the one
+ * picked up, or null. When strokes overlap the **nearer** one wins — "the later
+ * one wins" would let a thick stroke make the thin one under it permanently
+ * unerasable.
  */
-export function eraserHit<T extends { id: number; shape: Shape | null }>(
-  marks: readonly T[],
+export function strokeHit<T extends { id: number; shape: Shape }>(
+  strokes: readonly T[],
   x: number,
   y: number,
 ): number | null {
   let hitId: number | null = null;
   let hitDist = Number.POSITIVE_INFINITY;
-  for (const m of marks) {
-    if (!m.shape) continue;
-    const d = shapeContains(m.shape, x, y);
+  for (const s of strokes) {
+    const d = shapeContains(s.shape, x, y);
     if (d !== null && d < hitDist) {
       hitDist = d;
-      hitId = m.id;
+      hitId = s.id;
     }
   }
   return hitId;
+}
+
+/**
+ * What the on-screen eraser picks up — which group, and which of its marks.
+ *
+ * One mark, not the whole group: a crooked box should not cost the user the
+ * sentence they just typed. (Erasing the last mark does take the group with
+ * it — that is `removePart`'s job.)
+ *
+ * When marks overlap the **nearer** one wins. A pin has no stroke, so it is
+ * caught by its badge circle.
+ */
+export function partHit<
+  T extends {
+    id: number;
+    parts: readonly { shape: Shape | null; bounds: FeedbackRect; screen?: number }[];
+  },
+>(marks: readonly T[], x: number, y: number, onScreen?: number): { id: number; part: number } | null {
+  let hit: { id: number; part: number } | null = null;
+  let hitDist = Number.POSITIVE_INFINITY;
+  for (const m of marks) {
+    for (let i = 0; i < m.parts.length; i += 1) {
+      const part = m.parts[i];
+      // Only this screen's marks. One from an earlier screen is invisible here,
+      // so erasing it would be erasing a ghost.
+      if (onScreen !== undefined && part.screen !== onScreen) continue;
+      const byBadge = badgeContains(part.bounds, x, y);
+      const byShape = part.shape ? shapeContains(part.shape, x, y) : null;
+      const d = Math.min(byBadge ?? Number.POSITIVE_INFINITY, byShape ?? Number.POSITIVE_INFINITY);
+      if (d < hitDist) {
+        hitDist = d;
+        hit = { id: m.id, part: i };
+      }
+    }
+  }
+  return hit;
 }

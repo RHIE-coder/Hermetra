@@ -16,7 +16,7 @@ export const FEEDBACK_ATTR = 'data-hermetra-feedback';
 // wiring, and it answers nothing about "which file is this bit of screen from".
 const NOISE_SUFFIX = /(Context|Provider|Boundary|Root|Node|Handler)$/;
 const NOISE_EXACT =
-  /^(Routes|Route|Router|HashRouter|BrowserRouter|MemoryRouter|Outlet|Navigate|RenderedRoute|Location|Fragment|Suspense|Activity|StrictMode|Slot|SlotClone|Presence|Primitive)$/;
+  /^(Routes|Route|Router|HashRouter|BrowserRouter|MemoryRouter|Outlet|Navigate|RenderedRoute|Location|Navigation|Fragment|Suspense|Activity|StrictMode|Slot|SlotClone|Presence|Primitive)$/;
 
 function isNoise(name: string): boolean {
   return NOISE_SUFFIX.test(name) || NOISE_EXACT.test(name) || !/^[A-Z]/.test(name);
