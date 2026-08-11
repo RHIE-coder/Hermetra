@@ -2,7 +2,7 @@
 core: steward
 managed_by: steward
 schema_version: 1
-feature: pipeline-sources
+feature: dev-feedback-review-panel
 phases:
   - intake
   - spec

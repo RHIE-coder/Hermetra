@@ -35,7 +35,7 @@
 
 ## TestSuite: 묶음·흐름 다루기 — 조용히 잃지 않는가
 
-구현: `src/renderer/components/dev-feedback/group.test.ts` (17)
+구현: `src/renderer/components/dev-feedback/group.test.ts` (24)
 
 | Case | 무엇 | 덮는 노드 | 계층 | 구현 |
 |---|---|---|---|---|
@@ -47,10 +47,29 @@
 | CASE-tools-035 | 지금 화면의 표시만 골라 주고, 걸친 화면 수를 센다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
 | CASE-tools-036 | 화면을 옮겨도 표시는 안 건드리고, 끝에서는 아무 일도 안 한다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
 | CASE-tools-037 | 화면을 빼면 그 화면 표시도 같이 가고, 남은 화면 번호는 그대로다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
+| CASE-tools-038 | 메모 고치기는 화면을 안 받는다(지난 화면 항목도 고쳐진다) | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-039 | 항목 통째로 지우면 걸친 화면의 표시까지 같이 간다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-069 | 한 화면 몫만 빼면 다른 화면의 표시·메모·그림은 남고, 남는 표시가 없으면 항목도 사라진다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+
+## TestSuite: 훑어보기 목록 파생 — 보내고 나서야 드러날 어긋남
+
+구현: `src/renderer/components/dev-feedback/review.test.ts` (12)
+
+목록은 저장되는 게 아니라 파생된다. 아래 셋은 화면만 봐서는 안 보이고, **보낸 뒤에** 유저가
+읽은 것과 에이전트가 읽은 것이 다르다는 형태로만 드러난다.
+
+| Case | 무엇 | 덮는 노드 | 계층 | 구현 |
+|---|---|---|---|---|
+| CASE-tools-070 | 지금 보는 화면이 늘 맨 끝에 서고, 그림도 차례 손잡이도 없다 | `tools.dev-feedback.review` | UI | `review.test.ts` |
+| CASE-tools-071 | 단계 번호는 흐름 순서를 따르고 뜬 순서(그림 이름)는 그대로다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-072 | 표시가 없는 화면은 항목 줄이 없다(화면 줄은 남는다) | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-073 | 화면을 걸친 항목은 걸친 화면마다 한 줄씩 서고, 화면별 표시 수를 따로 센다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-074 | 배지 번호가 화면별이 아니라 묶음 전체 순서를 따른다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-075 | 가리킨 요소 이름을 그 화면의 첫 표시에서 뽑는다(지난 화면 것이 아니다) | `tools.dev-feedback.review` | UI | 같은 파일 |
 
 ## TestSuite: 그리기 기하 — 화면과 저장물이 같은 함수를 읽는다
 
-구현: `src/renderer/components/dev-feedback/draw.test.ts` (22)
+구현: `src/renderer/components/dev-feedback/draw.test.ts` (20)
 
 | Case | 무엇 | 덮는 노드 | 계층 | 구현 |
 |---|---|---|---|---|
@@ -63,7 +82,7 @@
 
 ## TestSuite: 오버레이 — 몸짓이 갈래를 가르고, 메모창이 묶는다
 
-구현: `src/renderer/components/dev-feedback/feedback-overlay.test.tsx` (19)
+구현: `src/renderer/components/dev-feedback/feedback-overlay.test.tsx` (28)
 
 | Case | 무엇 | 덮는 노드 | 계층 | 구현 |
 |---|---|---|---|---|
@@ -78,16 +97,25 @@
 | CASE-tools-048 | "다음 화면"이 화면을 굳히고 오버레이를 접는다(버리지 않는다) | `tools.dev-feedback.flow` | UI | 같은 파일 |
 | CASE-tools-049 | 다음 화면에 지난 화면 자국이 안 그려진다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
 | CASE-tools-050 | 화면을 걸친 묶음이 두 화면에서 같은 번호를 단다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
-| CASE-tools-056 | 다른 화면에서 묶음을 열면 안내가 번호를 밝히고, 그리면 메모창에 자리를 내준다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
+| CASE-tools-056 | 훑어보기의 `이어 그리기` 뒤 안내가 번호를 밝히고, 그리면 메모창에 자리를 내준다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
 | CASE-tools-051 | 보낼 때 흐름 순서와 표시별 단계가 채널로 나간다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
 | CASE-tools-052 | 아무것도 안 그린 지금 화면은 흐름 끝에 안 붙는다 | `tools.dev-feedback.flow` | UI | 같은 파일 |
 | CASE-tools-053 | 닫으면 쌓아 둔 초안을 지운다 | `tools.dev-feedback.draft` | UI | 같은 파일 |
 | CASE-tools-054 | 캡처 전에 자기 도구막대를 DOM 에서 걷는다 | `tools.dev-feedback.capture` | UI | 같은 파일 |
 | CASE-tools-055 | 저장이 실패해도 쌓아 둔 화면과 표시가 살아 다시 보낼 수 있다 | `tools.dev-feedback.draft` | UI | 같은 파일 |
+| CASE-tools-080 | **지난 화면 항목의 메모를 훑어보기에서 곧바로 고치면 그 값이 채널로 나간다** | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-081 | **그 항목만 지워도 같은 화면의 다른 항목과 그 화면 자체는 남는다** | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-082 | 걸친 항목의 한 화면 몫만 빼면 줄이 하나 남고 메모도 살아남는다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-083 | `이 화면 표시만 빼기`는 걸친 항목에만 뜬다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-084 | 화면을 빼면 알림이 패널 머리줄에 그려진다(가려진 자리가 아니다) | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-085 | 지금 보는 화면도 줄이 서고, 굳힌 화면이 없으면 차례 손잡이가 없다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-086 | 쌓은 것도 그린 것도 없으면 훑어보기가 잠긴다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-087 | Esc 가 고르기를 훑어보기보다 먼저 걷는다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-088 | 뺀 화면의 썸네일이 그 번호를 물려받은 화면 밑에 안 앉는다 | `tools.dev-feedback.review` | UI | 같은 파일 |
 
 ## TestSuite: 저장 — 초안으로 쌓고 폴더로 끝낸다
 
-구현: `tests/api/dev-feedback.test.ts` (15)
+구현: `tests/api/dev-feedback.test.ts` (19)
 
 | Case | 무엇 | 덮는 노드 | 계층 | 구현 |
 |---|---|---|---|---|
@@ -100,6 +128,9 @@
 | CASE-tools-066 | 그림 한 장이 없어져도 나머지를 저장하고 없는 척하지 않는다 | `tools.dev-feedback.capture` | API | 같은 파일 |
 | CASE-tools-067 | 하루 지난 초안을 치운다 | `tools.dev-feedback.draft` | API | 같은 파일 |
 | CASE-tools-068 | 닫기는 초안 폴더만 지우고, 최종 폴더는 못 지운다 | `tools.dev-feedback.draft` | API | 같은 파일 |
+| CASE-tools-090 | 쌓아 둔 화면을 줄인 그림으로 돌려준다 | `tools.dev-feedback.review` | API | 같은 파일 |
+| CASE-tools-091 | 그림이 없거나 못 줄이면 `null` 이다(목록을 거절하지 않는다) | `tools.dev-feedback.review` | API | 같은 파일 |
+| CASE-tools-092 | 초안 이름·화면 번호로 폴더 밖을 읽을 수 없다 | `tools.dev-feedback.review` | API | 같은 파일 |
 
 ## 안 덮는 것 (전제와 함께)
 
@@ -111,3 +142,9 @@
   모양을 확인하고 못 읽으면 새로 시작한다 — 실패해도 지금 작업을 깨뜨리지 않는 자리다.
 - **e2e 에서 안 돈다.** e2e 는 프로덕션 빌드를 띄우는데 이 도구는 거기 없다(정본의
   `AC-tools.dev-feedback-01`). 개발 모드로 강제 빌드해야만 뜨므로 정규 e2e 대상이 아니다.
+  실제 화면을 밟는 확인은 **일회용 스크립트**로 한다: 떠 있는 개발 서버를
+  `ELECTRON_RENDERER_URL` 로 물리고 빌드된 메인을 격리 userData 로 Playwright 로 띄운다.
+  회귀는 위 순수 로직·컴포넌트 케이스가 진다.
+- **썸네일의 픽셀은 판정하지 않는다.** `dev:feedback:shot` 은 줄이는 일을 `nativeImage` 에
+  주입해 넘기므로 API 케이스는 "읽어서 넘겼는가 / 못 읽으면 `null` 인가"까지만 본다. 줄인
+  그림이 실제로 그 화면인지는 위 일회용 스크립트가 눈으로 본다.

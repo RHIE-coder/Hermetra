@@ -32,6 +32,8 @@ import type { SidecarStatus } from '../types/pipeline';
 import type {
   FeedbackRequest,
   FeedbackSaveResult,
+  FeedbackShotRequest,
+  FeedbackShotResult,
   FeedbackStepRequest,
   FeedbackStepResult,
 } from '../dev-feedback';
@@ -160,6 +162,10 @@ export const CHANNELS = {
   DEV_FEEDBACK_STEP: 'dev:feedback:step',
   DEV_FEEDBACK_SAVE: 'dev:feedback:save',
   DEV_FEEDBACK_DISCARD: 'dev:feedback:discard',
+  // Reading one collected screen back as a thumbnail, for the review panel. The
+  // pictures are already on disk, so they are read when looked at rather than
+  // carried in the round's own state.
+  DEV_FEEDBACK_SHOT: 'dev:feedback:shot',
 
   // Subscriptions (main → renderer)
   EVT_BRIDGE_EVENT: 'evt:bridge:event',
@@ -296,6 +302,7 @@ export interface IpcContract {
   [CHANNELS.DEV_FEEDBACK_STEP]: { input: FeedbackStepRequest; output: FeedbackStepResult };
   [CHANNELS.DEV_FEEDBACK_SAVE]: { input: FeedbackRequest; output: FeedbackSaveResult };
   [CHANNELS.DEV_FEEDBACK_DISCARD]: { input: { draft: string }; output: { ok: boolean } };
+  [CHANNELS.DEV_FEEDBACK_SHOT]: { input: FeedbackShotRequest; output: FeedbackShotResult };
 }
 
 export type RequestOf<C extends ChannelName> = IpcContract[C]['input'];

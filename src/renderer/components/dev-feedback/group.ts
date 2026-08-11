@@ -25,6 +25,47 @@ export function removePart(marks: readonly DraftMark[], id: number, index: numbe
   });
 }
 
+/**
+ * Rewrites one group's memo.
+ *
+ * It takes no screen: coordinates belong to a screen, a sentence does not. That
+ * is what lets the review panel edit the memo of a group whose marks are all on
+ * an earlier screen — the case the on-screen memo box cannot serve, because it
+ * hangs off a mark and there is none here to hang off.
+ */
+export function setMemo(marks: readonly DraftMark[], id: number, memo: string): DraftMark[] {
+  return marks.map((m) => (m.id === id ? { ...m, memo } : m));
+}
+
+/** Removes a whole group — every mark it holds, on every screen it reaches. */
+export function removeMark(marks: readonly DraftMark[], id: number): DraftMark[] {
+  return marks.filter((m) => m.id !== id);
+}
+
+/**
+ * Removes **one screen's share** of a group, leaving its marks and memo on the
+ * other screens alone.
+ *
+ * This is the smallest unit the review panel can offer for an earlier screen: a
+ * single mark cannot be picked there (its coordinates are in that screen's
+ * viewport, so there is nothing on this glass to point at), but "this screen's
+ * part of this request" can. Without it, pulling one screen out of a request
+ * means dropping the screen — which takes every *other* group's marks on it too.
+ *
+ * Left with no marks the group goes, same rule as `removePart`.
+ */
+export function removePartsOnScreen(
+  marks: readonly DraftMark[],
+  id: number,
+  screen: number,
+): DraftMark[] {
+  return marks.flatMap((m) => {
+    if (m.id !== id) return [m];
+    const parts = m.parts.filter((p) => p.screen !== screen);
+    return parts.length > 0 ? [{ ...m, parts }] : [];
+  });
+}
+
 /** Is this group about to vanish? The caller uses it to close the memo box too. */
 export function isLastPart(marks: readonly DraftMark[], id: number): boolean {
   const mark = marks.find((m) => m.id === id);

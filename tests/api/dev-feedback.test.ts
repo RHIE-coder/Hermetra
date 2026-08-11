@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CHANNELS } from '@shared/ipc/channels';
 import { PNG_DATA_URL_PREFIX } from '@shared/dev-feedback';
-import { discardDraft, finishFeedback, saveDraftStep } from '@main/services/devFeedback';
+import { discardDraft, finishFeedback, readDraftShot, saveDraftStep } from '@main/services/devFeedback';
 
 /**
  * The save side of the dev feedback tool.
@@ -79,6 +79,56 @@ describe('dev feedback — IPC contract', () => {
     expect(CHANNELS.DEV_FEEDBACK_STEP).toBe('dev:feedback:step');
     expect(CHANNELS.DEV_FEEDBACK_SAVE).toBe('dev:feedback:save');
     expect(CHANNELS.DEV_FEEDBACK_DISCARD).toBe('dev:feedback:discard');
+    expect(CHANNELS.DEV_FEEDBACK_SHOT).toBe('dev:feedback:shot');
+  });
+});
+
+describe('readDraftShot — the review panel shows the screens collected', () => {
+  // The panel lists frozen screens, and a route alone does not tell them apart
+  // when a flow visits the same one twice. The picture is already on disk, so it
+  // is read when looked at rather than carried in the round's own state.
+  it('hands back a shrunken copy of a frozen screen', async () => {
+    await collectTwoScreens();
+    const res = await readDraftShot(
+      { draft, seq: 2 },
+      { root: tmpRoot, thumbnail: (png) => `${PNG_DATA_URL_PREFIX}${png.length}` },
+    );
+    expect(res.dataUrl).toBe(`${PNG_DATA_URL_PREFIX}70`);
+  });
+
+  // The list is carried by the memos and the elements; a missing picture must
+  // cost a thumbnail and nothing else.
+  it('hands back null for a screen with no picture on disk', async () => {
+    await collectTwoScreens();
+    const opts = { root: tmpRoot, thumbnail: () => PNG };
+    expect((await readDraftShot({ draft, seq: 9 }, opts)).dataUrl).toBeNull();
+    expect((await readDraftShot({ draft: '_draft-20260101-090000-none', seq: 1 }, opts)).dataUrl).toBeNull();
+  });
+
+  it('hands back null when the picture cannot be shrunk', async () => {
+    await collectTwoScreens();
+    const res = await readDraftShot(
+      { draft, seq: 1 },
+      {
+        root: tmpRoot,
+        thumbnail: () => {
+          throw new Error('nativeImage refused');
+        },
+      },
+    );
+    expect(res.dataUrl).toBeNull();
+  });
+
+  // The draft name and the screen number both come off the wire and both become
+  // path segments — the same hole `saveDraftStep` closes.
+  it('refuses a draft name it did not mint, and a screen number it could not have written', async () => {
+    await collectTwoScreens();
+    const opts = { root: tmpRoot, thumbnail: () => PNG };
+    expect(await readDraftShot({ draft: '../../etc', seq: 1 }, opts)).toEqual({ dataUrl: null });
+    expect(await readDraftShot({ draft: folder, seq: 1 }, opts)).toEqual({ dataUrl: null });
+    expect(await readDraftShot({ draft, seq: 0 }, opts)).toEqual({ dataUrl: null });
+    expect(await readDraftShot({ draft, seq: 1.5 }, opts)).toEqual({ dataUrl: null });
+    expect(await readDraftShot('nope', opts)).toEqual({ dataUrl: null });
   });
 });
 

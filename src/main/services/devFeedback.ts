@@ -17,7 +17,7 @@
  *  (2) Taking the screenshot is injected, not imported. Electron's
  *      `webContents.capturePage()` is the real one; a test passes its own.
  */
-import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   DRAFT_PREFIX,
@@ -31,6 +31,7 @@ import {
   renderNoteMarkdown,
   shotFileName,
   type FeedbackSaveResult,
+  type FeedbackShotResult,
   type FeedbackStepResult,
 } from '@shared/dev-feedback';
 
@@ -50,6 +51,12 @@ export type FeedbackOptions = {
   root?: string;
   /** Returns a PNG data URL of the window, or null when there is none. */
   capture?: () => Promise<string | null>;
+  /**
+   * Shrinks a collected screen into a thumbnail data URL. Injected for the same
+   * reason as `capture`: Electron's `nativeImage` is the real one, and a test
+   * that had to load it could not run in a plain node environment.
+   */
+  thumbnail?: (png: Buffer) => string | null;
 };
 
 /** Decodes the base64 half of a data URL into the bytes that go on disk. */
@@ -114,6 +121,35 @@ export async function saveDraftStep(
   }
 
   return { ok: true, draft: folder };
+}
+
+/**
+ * Reads one collected screen back as a thumbnail, for the review panel.
+ *
+ * **Every failure answers `null`.** The panel is carried by the memos and the
+ * elements; a picture that was swept, never captured or cannot be decoded must
+ * cost a thumbnail and nothing else — refusing the whole panel over it would be
+ * backwards.
+ *
+ * The draft name and the screen number both arrive off the wire and both become
+ * path segments, so both are checked exactly as `saveDraftStep` checks them: a
+ * whitelisted draft shape, and an integer screen number from 1.
+ */
+export async function readDraftShot(
+  raw: unknown,
+  opts: FeedbackOptions = {},
+): Promise<FeedbackShotResult> {
+  if (!isRecord(raw) || !isDraftFolderName(raw.draft)) return { dataUrl: null };
+  if (typeof raw.seq !== 'number' || !Number.isInteger(raw.seq) || raw.seq < 1) {
+    return { dataUrl: null };
+  }
+  try {
+    const png = await readFile(path.join(rootDir(opts), raw.draft, draftShotFileName(raw.seq)));
+    return { dataUrl: opts.thumbnail?.(png) ?? null };
+  } catch {
+    /* no picture for this screen — the capture failed, or a sweep took it */
+    return { dataUrl: null };
+  }
 }
 
 /**

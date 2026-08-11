@@ -17,7 +17,7 @@
 // Three containers nest here: a **flow** (screens) holds **groups** (one memo
 // each) holds **marks** (one stroke or pin each). Groups and screens cross —
 // one memo can span several screens.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BADGE_RADIUS,
   badgeCenter,
@@ -28,18 +28,22 @@ import {
 import { CHANNELS } from '@shared/ipc/channels';
 import { invoke } from '@/services/ipc';
 import { useT } from '@/lib/i18n';
-import { FEEDBACK_ATTR, targetInBounds } from './inspect';
+import { FEEDBACK_ATTR, SCROLL_ATTR, targetInBounds } from './inspect';
 import { boundsOfShape, partHit, polylinesOf, svgPath } from './draw';
-import { FlowModal } from './flow-modal';
+import { ReviewModal } from './review-modal';
+import { reviewScreens } from './review';
 import {
   appendPart,
   isLastPart,
   mergeMarks,
   moveStep,
   partsOnScreen,
+  removeMark,
   removePart,
+  removePartsOnScreen,
   removeStep,
   screenSpan,
+  setMemo,
   splitMark,
 } from './group';
 import { SketchPad } from './sketch-pad';
@@ -181,8 +185,7 @@ export function FeedbackOverlay() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Shape | null>(null);
   const [hover, setHover] = useState<{ id: number; part: number } | null>(null);
-  const [listOpen, setListOpen] = useState(false);
-  /** Grouping after the fact — the groups being picked in the list. Null when not picking. */
+  /** Grouping after the fact — the groups being picked in the review panel. Null when not picking. */
   const [mergeIds, setMergeIds] = useState<number[] | null>(null);
   /** One line for actions that quietly lose something (a merge, a dropped screen). */
   const [notice, setNotice] = useState<string | null>(null);
@@ -199,10 +202,21 @@ export function FeedbackOverlay() {
   const [steps, setSteps] = useState<DraftStep[]>([]);
   /** The draft folder collecting on disk. Minted by main on the first freeze. */
   const [draftFolder, setDraftFolder] = useState<string | null>(null);
-  const [flowOpen, setFlowOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  /**
+   * Thumbnails of the screens collected, by capture number.
+   *
+   * They are **not** kept with the round in `sessionStorage`: a few window PNGs
+   * fill the quota, and a repaint during development would drop them anyway. The
+   * pictures are already in the draft folder, so they are read when looked at.
+   */
+  const [shots, setShots] = useState<Record<number, string>>({});
 
   const nextId = useRef(1);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Screens whose thumbnail has been asked for. Without it, a re-render while
+   *  a read is in flight asks for the same picture again. */
+  const shotsAsked = useRef(new Set<number>());
 
   /**
    * Identity of the screen being drawn on: one past the highest frozen.
@@ -244,16 +258,43 @@ export function FeedbackOverlay() {
     }
   }, [draftFolder, steps, marks]);
 
+  /**
+   * Forgets the collected thumbnails. The next round starts its screen numbers
+   * at 1 again, so a picture left behind would stand in a **different** round's
+   * list as if it belonged there.
+   */
+  const forgetShots = useCallback(() => {
+    shotsAsked.current.clear();
+    setShots({});
+  }, []);
+
+  /**
+   * Forgets one screen's thumbnail.
+   *
+   * Capture numbers are **reused** once a screen is dropped (`screen` is one past
+   * the highest still collected), so the next freeze can land on the number the
+   * dropped screen had. Kept, its photograph would sit under a different screen
+   * and the real one would never be read, because it was already asked for.
+   */
+  const forgetShot = useCallback((seq: number) => {
+    shotsAsked.current.delete(seq);
+    setShots((prev) => {
+      if (!(seq in prev)) return prev;
+      const next = { ...prev };
+      delete next[seq];
+      return next;
+    });
+  }, []);
+
   /** Folds away what is on screen. The collected flow stays alive. */
   const collapse = useCallback(() => {
     setOpen(false);
     setDraft(null);
     setEditingId(null);
     setHover(null);
-    setListOpen(false);
     setMergeIds(null);
     setSketchFor(null);
-    setFlowOpen(false);
+    setReviewOpen(false);
   }, []);
 
   /** Throws the whole round away, including the draft on disk. */
@@ -262,9 +303,10 @@ export function FeedbackOverlay() {
     setMarks([]);
     setSteps([]);
     setNotice(null);
+    forgetShots();
     if (draftFolder) void invoke(CHANNELS.DEV_FEEDBACK_DISCARD, { draft: draftFolder }).catch(() => {});
     setDraftFolder(null);
-  }, [collapse, draftFolder]);
+  }, [collapse, forgetShots, draftFolder]);
 
   // Freeze the screen. If an animation or a scroll moves things while marking,
   // the mark ends up pointing at a different element than the one under it.
@@ -277,7 +319,15 @@ export function FeedbackOverlay() {
       '[data-hermetra-frozen] *, [data-hermetra-frozen] *::before, [data-hermetra-frozen] *::after' +
       '{animation-play-state:paused!important;transition-property:none!important;}';
     document.head.appendChild(style);
-    const stopWheel = (e: WheelEvent) => e.preventDefault();
+    // Swallowing the wheel is what freezes the screen. The overlay's own long
+    // lists still have to scroll, so exactly one exception is made, keyed off a
+    // marker attribute — see SCROLL_ATTR. Without it the review panel cannot be
+    // scrolled at all, which three screens' worth of thumbnails already needs.
+    const stopWheel = (e: WheelEvent) => {
+      const at = e.target;
+      if (at instanceof Element && at.closest(`[${SCROLL_ATTR}]`)) return;
+      e.preventDefault();
+    };
     window.addEventListener('wheel', stopWheel, { passive: false });
     return () => {
       root.removeAttribute('data-hermetra-frozen');
@@ -285,6 +335,28 @@ export function FeedbackOverlay() {
       window.removeEventListener('wheel', stopWheel);
     };
   }, [open]);
+
+  // Reads the collected screens' pictures, once each, while the panel is up.
+  // Read on opening rather than on freezing: most rounds never open the panel,
+  // and a picture that is never looked at costs nothing this way.
+  useEffect(() => {
+    if (!reviewOpen || !draftFolder) return;
+    for (const step of steps) {
+      if (!step.hasImage || shotsAsked.current.has(step.seq)) continue;
+      shotsAsked.current.add(step.seq);
+      const seq = step.seq;
+      void invoke(CHANNELS.DEV_FEEDBACK_SHOT, { draft: draftFolder, seq })
+        .then((res) => {
+          // Null is an ordinary answer — the panel stands on the memos and the
+          // elements, and says "no picture" where one is missing.
+          if (res.dataUrl) setShots((prev) => ({ ...prev, [seq]: res.dataUrl as string }));
+        })
+        .catch(() => {
+          // Let it be asked for again next time the panel opens.
+          shotsAsked.current.delete(seq);
+        });
+    }
+  }, [reviewOpen, draftFolder, steps]);
 
   /** One line of feedback about the tool itself. A failure leaves the overlay
    *  open, so this is where it has to be said to be seen. */
@@ -328,7 +400,7 @@ export function FeedbackOverlay() {
     if (sending) return;
     setSending(true);
     setEditingId(null);
-    setFlowOpen(false);
+    setReviewOpen(false);
     const frozen = await freezeScreen();
     setSending(false);
     if (frozen) collapse();
@@ -345,13 +417,15 @@ export function FeedbackOverlay() {
         return;
       }
       if (e.key === 'Escape' && open) {
-        // One layer at a time: sketch pad → flow → note → picking → list →
-        // overlay, so a stray Escape never throws every mark away.
+        // One layer at a time: sketch pad → picking → review → note → overlay,
+        // so a stray Escape never throws every mark away.
+        //
+        // Picking comes **before** review: mid-merge, Escape means "stop
+        // picking", not "close the list I am picking from".
         if (sketchFor !== null) setSketchFor(null);
-        else if (flowOpen) setFlowOpen(false);
-        else if (editingId !== null) setEditingId(null);
         else if (mergeIds !== null) setMergeIds(null);
-        else if (listOpen) setListOpen(false);
+        else if (reviewOpen) setReviewOpen(false);
+        else if (editingId !== null) setEditingId(null);
         // The outermost Escape **folds**, it does not discard: minutes of work
         // across several screens must not go to one keystroke. Anything drawn
         // here is frozen first — unfrozen, those marks would lose the screen
@@ -362,7 +436,7 @@ export function FeedbackOverlay() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, editingId, listOpen, mergeIds, sketchFor, flowOpen, marks, screen, collapse, nextScreen]);
+  }, [open, editingId, mergeIds, sketchFor, reviewOpen, marks, screen, collapse, nextScreen]);
 
   useEffect(() => {
     // With the pad up, it is the subject — do not pull focus to the note box
@@ -546,7 +620,7 @@ export function FeedbackOverlay() {
     if (marks.length === 0 || sending) return;
     setSending(true);
     setEditingId(null);
-    setFlowOpen(false);
+    setReviewOpen(false);
     // Sending freezes the current screen first, down the same path as "next
     // screen". A separate path for the last screen would be a bug that shows up
     // only on the last screen.
@@ -609,6 +683,9 @@ export function FeedbackOverlay() {
       setDraftFolder(null);
       setMarks([]);
       setSteps([]);
+      // The next round numbers its screens from 1 again, so a thumbnail left
+      // here would stand in that round's list as somebody else's story.
+      forgetShots();
       collapse();
       window.setTimeout(() => setSaved(null), 4000);
     } catch (err) {
@@ -646,128 +723,28 @@ export function FeedbackOverlay() {
         }
       : null;
 
-  /** "Where did this point" for one list row — the group's first mark stands in. */
+  // The review list, derived. `screen` is the identity marks drawn right now
+  // carry, so the row for the screen in hand picks them up like any other.
+  const reviewList = useMemo(
+    () => reviewScreens(steps, marks, { seq: screen, route: currentRoute() }),
+    [steps, marks, screen],
+  );
+
+  /** "Where did this point" for the memo box — the group's first mark stands in. */
   const whereOf = (mark: DraftMark): string => {
     const target = mark.parts[0].target;
     return target?.components[0] ?? target?.tag ?? t('devFeedback.emptySpot');
   };
 
-  const listBtn =
-    'rounded-md px-2 py-1 text-[11px] font-medium text-card-foreground hover:bg-muted disabled:opacity-40';
-  // Past a couple of groups, a list beats checking badges one at a time. It is
-  // also where grouping-after-the-fact happens.
-  const memoList =
-    listOpen && marks.length > 0 ? (
-      <div
-        data-testid="dev-feedback-list"
-        className="pointer-events-auto w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-border bg-card/95 text-card-foreground shadow-lg backdrop-blur-sm"
-      >
-        {mergeIds ? (
-          <p className="px-2.5 pt-2 text-[11px] text-muted-foreground">
-            {t('devFeedback.group.mergePrompt')}
-          </p>
-        ) : null}
-        <div className="max-h-52 overflow-y-auto p-1">
-          {marks.map((m, i) => {
-            const picked = mergeIds?.includes(m.id) ?? false;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => {
-                  if (mergeIds) {
-                    setMergeIds(picked ? mergeIds.filter((id) => id !== m.id) : [...mergeIds, m.id]);
-                    return;
-                  }
-                  setListOpen(false);
-                  setHover(null);
-                  setEditingId(m.id);
-                }}
-                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
-              >
-                {mergeIds ? (
-                  <span
-                    aria-hidden
-                    className="mt-px shrink-0 text-xs"
-                    style={{ color: picked ? MARK_COLOR : undefined }}
-                  >
-                    {picked ? '◉' : '○'}
-                  </span>
-                ) : null}
-                <span className="mt-px shrink-0 text-xs font-semibold" style={{ color: MARK_COLOR }}>
-                  {markLabel(i)}
-                </span>
-                <span className="min-w-0 flex-1 text-xs">
-                  {m.memo.trim() || <span className="text-muted-foreground">{t('devFeedback.noMemo')}</span>}
-                  {m.parts.length > 1 ? (
-                    <span className="ml-1 text-[10px] text-muted-foreground">
-                      {t('devFeedback.group.parts', { n: m.parts.length })}
-                    </span>
-                  ) : null}
-                  {/* A group that spans screens has to say so here — with one
-                      badge visible and "3 marks" written, the other two are
-                      unfindable. */}
-                  {screenSpan(m) > 1 ? (
-                    <span className="ml-1 text-[10px]" style={{ color: MARK_COLOR }}>
-                      {t('devFeedback.group.screens', { n: screenSpan(m) })}
-                    </span>
-                  ) : null}
-                  {m.sketch ? (
-                    <span className="ml-1 text-[10px] text-success">{t('devFeedback.sketch.has')}</span>
-                  ) : null}
-                </span>
-                <span className="mt-px shrink-0 text-[10px] text-muted-foreground">{whereOf(m)}</span>
-              </button>
-            );
-          })}
-        </div>
-        {marks.length > 1 ? (
-          <div className="flex items-center gap-1 border-t border-border px-1.5 py-1">
-            {mergeIds ? (
-              <>
-                <button type="button" className={listBtn} onClick={() => setMergeIds(null)}>
-                  {t('devFeedback.close')}
-                </button>
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  data-testid="dev-feedback-merge-apply"
-                  className={listBtn}
-                  disabled={mergeIds.length < 2}
-                  onClick={applyMerge}
-                  style={mergeIds.length >= 2 ? { color: MARK_COLOR } : undefined}
-                >
-                  {mergeIds.length >= 2
-                    ? t('devFeedback.group.mergeCount', { n: mergeIds.length })
-                    : t('devFeedback.group.merge')}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className={listBtn}
-                onClick={() => {
-                  setMergeIds([]);
-                  setEditingId(null);
-                }}
-              >
-                {t('devFeedback.group.mergeStart')}
-              </button>
-            )}
-          </div>
-        ) : null}
-      </div>
-    ) : null;
-
   const barSide = dock === 'top' ? 'top-0' : 'bottom-0';
   const btn =
     'rounded-md px-2.5 py-1.5 text-xs font-medium text-card-foreground hover:bg-muted disabled:opacity-40';
   const hintClass = 'rounded-full bg-card/90 px-2 py-0.5 text-[11px] text-muted-foreground';
-  // A group reopened from the list has no mark on this screen yet, so its memo
-  // box has nothing to hang off and does not appear. Without a word here, the
-  // list tap looks like it did nothing at all — this line is the receipt, and
-  // it says what to do next. It outranks the flow line because it answers a
-  // question the user asked half a second ago.
+  // A group carried on from the review panel has no mark on this screen yet, so
+  // its memo box has nothing to hang off and does not appear. Without a word
+  // here, "draw more" looks like it did nothing at all — this line is the
+  // receipt, and it says what to do next. It outranks the flow line because it
+  // answers a question the user asked half a second ago.
   //
   // Being mid-flow comes next: not knowing which screen you are on, you cannot
   // tell whether "next screen" even registered.
@@ -947,15 +924,14 @@ export function FeedbackOverlay() {
       {/* The toolbar. A full-width bar would make that whole strip un-markable,
           so it is a centred pill with the sides left clear for the canvas; if
           the pill covers the thing you need to point at, flip it.
-          It goes entirely while the sketch pad or the flow is up (hidden but
-          present, its buttons would still take tab focus) and while a screen is
-          being photographed. */}
-      {sketching || flowOpen || sending ? null : (
+          It goes entirely while the sketch pad or the review panel is up (hidden
+          but present, its buttons would still take tab focus) and while a screen
+          is being photographed. */}
+      {sketching || reviewOpen || sending ? null : (
         <div className={`pointer-events-none absolute inset-x-0 ${barSide} flex flex-col items-center gap-1 p-2`}>
           {dock === 'bottom' ? (
             <>
               {hintLine}
-              {memoList}
               {toolStrip}
             </>
           ) : null}
@@ -971,18 +947,26 @@ export function FeedbackOverlay() {
             >
               {dock === 'top' ? t('devFeedback.dockDown') : t('devFeedback.dockUp')}
             </button>
+            {/* One button where there used to be two ("list" and "flow"). They
+                split the job: the list showed the memos but could only *open* an
+                item, and an item on an earlier screen had nowhere for its memo
+                box to stand; the flow showed screens with neither memo nor
+                drawing. Reviewing and fixing are the same act, so they are the
+                same panel. Nothing collected and nothing drawn means there is
+                nothing to review. */}
             <button
               type="button"
-              data-testid="dev-feedback-list-toggle"
+              data-testid="dev-feedback-review-open"
               className={btn}
-              disabled={marks.length === 0}
+              disabled={steps.length === 0 && marks.length === 0}
               onClick={() => {
-                setListOpen((v) => !v);
+                setReviewOpen(true);
                 setEditingId(null);
                 setMergeIds(null);
+                setHover(null);
               }}
             >
-              {t('devFeedback.list')}
+              {t('devFeedback.review.title')}
             </button>
             <button
               type="button"
@@ -993,21 +977,6 @@ export function FeedbackOverlay() {
             >
               {t('devFeedback.undo')}
             </button>
-            {/* Editing the flow only means something once a screen is frozen. */}
-            {steps.length > 0 ? (
-              <button
-                type="button"
-                data-testid="dev-feedback-flow-open"
-                className={btn}
-                onClick={() => {
-                  setFlowOpen(true);
-                  setEditingId(null);
-                  setListOpen(false);
-                }}
-              >
-                {t('devFeedback.flowCount', { n: steps.length })}
-              </button>
-            ) : null}
             {/*
               "Next screen" — freeze this screen as a picture and fold away.
               Use the app, reopen the handle, and the screen you are on then is
@@ -1039,16 +1008,15 @@ export function FeedbackOverlay() {
           {dock === 'top' ? (
             <>
               {toolStrip}
-              {memoList}
               {hintLine}
             </>
           ) : null}
         </div>
       )}
 
-      {/* The memo box for a group. Struck behind the sketch pad and the flow,
-          and while a screen is being photographed. */}
-      {editing && bubble && !sketching && !flowOpen && !sending ? (
+      {/* The memo box for a group. Struck behind the sketch pad and the review
+          panel, and while a screen is being photographed. */}
+      {editing && bubble && !sketching && !reviewOpen && !sending ? (
         <div
           style={{ top: bubble.top, left: bubble.left, width: bubble.width }}
           className="absolute rounded-lg border border-border bg-card p-2.5 text-card-foreground shadow-lg"
@@ -1119,7 +1087,7 @@ export function FeedbackOverlay() {
               type="button"
               className={btn}
               onClick={() => {
-                setMarks((prev) => prev.filter((m) => m.id !== editing.id));
+                setMarks((prev) => removeMark(prev, editing.id));
                 setEditingId(null);
               }}
             >
@@ -1145,19 +1113,45 @@ export function FeedbackOverlay() {
         />
       ) : null}
 
-      {/* Editing the flow — same slot as the sketch pad (both cover drawing). */}
-      {flowOpen && !sketching ? (
-        <FlowModal
-          steps={steps}
-          marks={marks}
-          current={{ route: currentRoute(), screen }}
-          onMove={(index, delta) => setSteps((prev) => moveStep(prev, index, delta))}
-          onRemove={(index) => {
+      {/* Review — same slot as the sketch pad (both cover drawing). It stays
+          open behind the pad, so finishing a drawing comes back to the list the
+          user opened it from rather than dropping them onto the canvas. */}
+      {reviewOpen && !sketching ? (
+        <ReviewModal
+          screens={reviewList}
+          shots={shots}
+          notice={notice}
+          mergeIds={mergeIds}
+          onMemo={(id, memo) => setMarks((prev) => setMemo(prev, id, memo))}
+          onRemoveMark={(id) => {
+            setMarks((prev) => removeMark(prev, id));
+            if (editingId === id) setEditingId(null);
+          }}
+          onRemoveHere={(id, sc) => {
+            const next = removePartsOnScreen(marks, id, sc);
+            setMarks(next);
+            // It can take the whole item, when that screen held its last marks.
+            if (!next.some((m) => m.id === id)) {
+              if (editingId === id) setEditingId(null);
+              say(t('devFeedback.review.droppedLast'));
+            }
+          }}
+          onContinue={(id) => {
+            // Pick the group and fold the panel: the next mark drawn joins it.
+            setEditingId(id);
+            setReviewOpen(false);
+          }}
+          onSketch={setSketchFor}
+          onMoveStep={(index, delta) => setSteps((prev) => moveStep(prev, index, delta))}
+          onRemoveStep={(index) => {
             const next = removeStep(steps, marks, index);
             setSteps(next.steps);
             setMarks(next.marks);
-            // Groups disappear with the screen, so this is never passed over
-            // in silence.
+            const gone = steps[index];
+            if (gone) forgetShot(gone.seq);
+            // Items disappear with the screen, so this is never passed over in
+            // silence — and the panel draws it in its own header, because the
+            // hint slot under the toolbar is covered from here.
             const lost = marks.length - next.marks.length;
             say(
               lost > 0
@@ -1165,7 +1159,18 @@ export function FeedbackOverlay() {
                 : t('devFeedback.flow.removed'),
             );
           }}
-          onClose={() => setFlowOpen(false)}
+          onMergeStart={() => {
+            setMergeIds([]);
+            setEditingId(null);
+          }}
+          onMergeToggle={(id) =>
+            setMergeIds((prev) =>
+              prev === null ? [id] : prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
+            )
+          }
+          onMergeApply={applyMerge}
+          onMergeCancel={() => setMergeIds(null)}
+          onClose={() => setReviewOpen(false)}
         />
       ) : null}
     </div>

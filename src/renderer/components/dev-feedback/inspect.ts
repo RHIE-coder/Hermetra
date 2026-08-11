@@ -8,6 +8,18 @@ import type { FeedbackTarget } from '@shared/dev-feedback';
 /** Marker that keeps the overlay out of its own probe. */
 export const FEEDBACK_ATTR = 'data-hermetra-feedback';
 
+/**
+ * Marker on a box inside the overlay that is allowed to scroll.
+ *
+ * While the overlay is up it freezes the screen by swallowing `wheel` whole —
+ * anything moving under the hand makes a mark point at a different element than
+ * the one it was drawn over. Its own long lists still have to scroll, so the
+ * wheel handler makes **one** exception, keyed off this attribute. Kept next to
+ * `FEEDBACK_ATTR` because it is the same species: a DOM marker read with
+ * `closest()`, and a second copy of either string is a silent bug.
+ */
+export const SCROLL_ATTR = 'data-hermetra-feedback-scroll';
+
 // The React tree is full of plumbing — routers, providers, Radix internals.
 // Passed through as-is, the component chain fills up with noise and the
 // component that actually drew the screen gets buried.

@@ -145,6 +145,23 @@ export type FeedbackStepRequest = {
   route: string;
 };
 
+/**
+ * Reading one collected screen back, to show it beside its items in the review
+ * panel. `seq` is capture order — the same number `draftShotFileName` uses.
+ */
+export type FeedbackShotRequest = { draft: string; seq: number };
+
+/**
+ * The thumbnail, or null. **Null is an ordinary answer, not an error**: the
+ * substance of the panel is the memos and the elements, and a swept or failed
+ * picture must cost a thumbnail and nothing more.
+ */
+export type FeedbackShotResult = { dataUrl: string | null };
+
+/** How wide a collected screen comes back. Small enough that a dozen of them
+ *  cost nothing to hold, large enough to recognise the screen at a glance. */
+export const SHOT_THUMBNAIL_WIDTH = 320;
+
 export type FeedbackStepResult = { ok: true; draft: string } | { ok: false; error: string };
 /** What the renderer gets back: where it landed, or why it did not. */
 export type FeedbackSaveResult = { ok: true; saved: string } | { ok: false; error: string };

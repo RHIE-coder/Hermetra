@@ -5,9 +5,12 @@ import {
   mergeMarks,
   moveStep,
   partsOnScreen,
+  removeMark,
   removePart,
+  removePartsOnScreen,
   removeStep,
   screenSpan,
+  setMemo,
   splitMark,
 } from './group';
 import type { DraftMark, DraftStep, MarkPart } from './types';
@@ -71,6 +74,65 @@ describe('removePart — erasing takes one stroke, not the message', () => {
     expect(isLastPart([mark(1)], 1)).toBe(true);
     expect(isLastPart([mark(1, { parts: [part(), part()] })], 1)).toBe(false);
     expect(isLastPart([mark(1)], 99)).toBe(false);
+  });
+});
+
+describe('setMemo — the memo is not tied to a screen', () => {
+  // The review panel edits the memo of a group whose marks are on an earlier
+  // screen. Coordinates belong to a screen; the sentence does not.
+  it('rewrites one group’s memo and leaves the others alone', () => {
+    const marks = [mark(1, { memo: '처음' }), mark(2, { memo: '그대로' })];
+    const next = setMemo(marks, 1, '고친 말');
+    expect(next.map((m) => m.memo)).toEqual(['고친 말', '그대로']);
+    // The marks themselves are untouched — this is a text edit, nothing else.
+    expect(next[0].parts).toBe(marks[0].parts);
+  });
+
+  it('does nothing for a group that is not there', () => {
+    expect(setMemo([mark(1, { memo: 'a' })], 9, 'b')[0].memo).toBe('a');
+  });
+});
+
+describe('removeMark — dropping a whole group', () => {
+  // The smallest thing the panel could offer used to be "drop the screen",
+  // which took every other group's marks on it too.
+  it('takes the group with every mark it holds, across screens', () => {
+    const across = mark(1, { parts: [part({ screen: 1 }), part({ screen: 2 })] });
+    const out = removeMark([across, mark(2)], 1);
+    expect(out.map((m) => m.id)).toEqual([2]);
+  });
+
+  it('does nothing for a group that is not there', () => {
+    expect(removeMark([mark(1)], 9)).toHaveLength(1);
+  });
+});
+
+describe('removePartsOnScreen — one screen’s share of a group', () => {
+  const across = mark(1, {
+    parts: [part({ screen: 1 }), part({ screen: 2 }), part({ screen: 2 })],
+    memo: '한 요청',
+    sketch: 'A',
+  });
+
+  // The point of the whole thing: pulling this screen out of a request without
+  // touching what it says about the other one.
+  it('drops that screen’s marks and keeps the rest, memo and drawing included', () => {
+    const out = removePartsOnScreen([across], 1, 2);
+    expect(out).toHaveLength(1);
+    expect(out[0].parts.map((p) => p.screen)).toEqual([1]);
+    expect(out[0]).toMatchObject({ memo: '한 요청', sketch: 'A' });
+  });
+
+  // Same rule as removePart: a memo with nothing pointing at anything cannot be
+  // placed on a screen.
+  it('drops the group when that screen held its last marks', () => {
+    expect(removePartsOnScreen([across, mark(2)], 1, 1).map((m) => m.id)).toEqual([1, 2]);
+    expect(removePartsOnScreen([mark(1, { parts: [part({ screen: 1 })] })], 1, 1)).toHaveLength(0);
+  });
+
+  it('leaves other groups alone even when they are on that screen', () => {
+    const out = removePartsOnScreen([across, mark(2, { parts: [part({ screen: 2 })] })], 1, 2);
+    expect(out[1].parts).toHaveLength(1);
   });
 });
 

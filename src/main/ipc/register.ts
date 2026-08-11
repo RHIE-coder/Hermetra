@@ -1,5 +1,6 @@
-import { app, ipcMain, type BrowserWindow } from 'electron';
+import { app, ipcMain, nativeImage, type BrowserWindow } from 'electron';
 import { CHANNELS } from '@shared/ipc/channels';
+import { SHOT_THUMBNAIL_WIDTH } from '@shared/dev-feedback';
 import type { Scenario } from '@shared/types/bridge';
 import type { Capability, Connection, SavedDevice } from '@shared/types/mobile';
 import type { ScriptFileBody, ScriptMoveRequest, UrlBookmark } from '@shared/types/web';
@@ -21,7 +22,7 @@ import { connectionsService } from '../services/connections';
 import { appleCertsService } from '../services/appleCerts';
 import { BrowserInstaller } from '../services/browserInstall';
 import { createSidecarSupervisor } from '../sidecar';
-import { discardDraft, finishFeedback, saveDraftStep } from '../services/devFeedback';
+import { discardDraft, finishFeedback, readDraftShot, saveDraftStep } from '../services/devFeedback';
 import type { Workspace } from '@shared/types/workspace';
 
 export function registerIpc(getWindow: () => BrowserWindow | null) {
@@ -328,10 +329,20 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
       const image = await win.webContents.capturePage();
       return image.isEmpty() ? null : image.toDataURL();
     };
+    // Shrinking a collected screen for the review panel. It happens here rather
+    // than in the renderer because the bytes are on disk, and a full-size window
+    // PNG per screen would cross IPC for nothing.
+    const thumbnail = (png: Buffer) => {
+      const image = nativeImage.createFromBuffer(png);
+      if (image.isEmpty()) return null;
+      return image.resize({ width: SHOT_THUMBNAIL_WIDTH, quality: 'good' }).toDataURL();
+    };
     // A round is collected screen by screen: STEP freezes the screen the user
-    // is about to leave, SAVE ends the round, DISCARD throws it away.
+    // is about to leave, SAVE ends the round, DISCARD throws it away. SHOT reads
+    // one back so the panel can show what was collected.
     ipcMain.handle(CHANNELS.DEV_FEEDBACK_STEP, (_e, raw) => saveDraftStep(raw, { capture }));
     ipcMain.handle(CHANNELS.DEV_FEEDBACK_SAVE, (_e, raw) => finishFeedback(raw));
     ipcMain.handle(CHANNELS.DEV_FEEDBACK_DISCARD, (_e, raw) => discardDraft(raw));
+    ipcMain.handle(CHANNELS.DEV_FEEDBACK_SHOT, (_e, raw) => readDraftShot(raw, { thumbnail }));
   }
 }

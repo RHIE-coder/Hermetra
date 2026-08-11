@@ -24,6 +24,7 @@ beforeEach(() => {
   invoke.mockImplementation(async (channel: string) => {
     if (channel === 'dev:feedback:step') return { ok: true, draft: '_draft-20260810-090000-bridge-bus' };
     if (channel === 'dev:feedback:save') return { ok: true, saved: '.harness/feedback/20260810-090000-bridge-bus' };
+    if (channel === 'dev:feedback:shot') return { dataUrl: 'data:image/png;base64,AA' };
     return { ok: true };
   });
   window.bridge = { invoke, on: () => () => {}, channels: {}, platform: 'darwin' } as never;
@@ -62,6 +63,25 @@ const openOverlay = () => {
 const badges = (canvas: Element) => canvas.querySelectorAll('text');
 const badgeLabels = (canvas: Element) => [...badges(canvas)].map((b) => b.textContent);
 const callsOn = (channel: string) => invoke.mock.calls.filter((c) => c[0] === channel);
+
+/** Opens the one panel where a collected round is looked at and fixed. */
+const openReview = () => {
+  fireEvent.click(screen.getByTestId('dev-feedback-review-open'));
+  return screen.getByTestId('dev-feedback-review');
+};
+
+/** The panel covers the toolbar, so "send" is only reachable once it is folded. */
+const closeReview = () => fireEvent.click(screen.getByTestId('dev-feedback-review-close'));
+
+/**
+ * Freezes the current screen and comes back with the overlay open again — the
+ * shape of every multi-screen case here.
+ */
+const goToNextScreen = async () => {
+  fireEvent.click(screen.getByTestId('dev-feedback-next-screen'));
+  await waitFor(() => expect(screen.queryByTestId('dev-feedback-canvas')).toBeNull());
+  return openOverlay();
+};
 
 describe('FeedbackOverlay — marking', () => {
   it('opens from the edge handle', () => {
@@ -206,33 +226,29 @@ describe('FeedbackOverlay — a flow across screens', () => {
     setup();
     const first = openOverlay();
     tap(first, 300, 300);
-    fireEvent.click(screen.getByTestId('dev-feedback-next-screen'));
-    await waitFor(() => expect(screen.queryByTestId('dev-feedback-canvas')).toBeNull());
+    const second = await goToNextScreen();
 
-    // Reopen the same group from the list, then draw again on the new screen.
-    const second = openOverlay();
-    fireEvent.click(screen.getByTestId('dev-feedback-list-toggle'));
-    fireEvent.click(screen.getByTestId('dev-feedback-list').querySelector('button')!);
+    // Carry the same group on from the review panel, then draw on the new screen.
+    openReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-review-continue'));
     tap(second, 500, 500);
 
     expect(badgeLabels(second)).toEqual(['①']);
     expect(screen.getByTestId('dev-feedback-memo')).toBeTruthy();
   });
 
-  // Reopened here, the group has no mark on this screen, so its memo box has
-  // nothing to hang off and does not appear. Without a word, the list tap looks
+  // Carried on here, the group has no mark on this screen, so its memo box has
+  // nothing to hang off and does not appear. Without a word, "draw more" looks
   // like it did nothing — and the user gives up on the one path that carries a
   // message across screens.
   it('says which group is being carried on when it has no mark on this screen yet', async () => {
     setup();
     const first = openOverlay();
     tap(first, 300, 300);
-    fireEvent.click(screen.getByTestId('dev-feedback-next-screen'));
-    await waitFor(() => expect(screen.queryByTestId('dev-feedback-canvas')).toBeNull());
+    const second = await goToNextScreen();
 
-    const second = openOverlay();
-    fireEvent.click(screen.getByTestId('dev-feedback-list-toggle'));
-    fireEvent.click(screen.getByTestId('dev-feedback-list').querySelector('button')!);
+    openReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-review-continue'));
 
     expect(screen.getByTestId('dev-feedback-hint').textContent).toContain('①');
     // And it steps aside once there is a mark here to hang the memo box on.
@@ -296,6 +312,172 @@ describe('FeedbackOverlay — a flow across screens', () => {
   });
 });
 
+/**
+ * The panel exists because of one failure: an item drawn on an earlier screen
+ * could be neither edited nor deleted. The memo box hangs off a mark, and there
+ * is no mark from that screen on this glass — so the only way to remove one item
+ * was to drop the whole screen, which took every other item on it too and left
+ * the user redrawing from memory.
+ */
+describe('FeedbackOverlay — reviewing an earlier screen', () => {
+  it('fixes the memo of an item left on an earlier screen, in place', async () => {
+    setup();
+    const first = openOverlay();
+    tap(first, 300, 300);
+    fireEvent.change(screen.getByTestId('dev-feedback-memo'), { target: { value: '정렬이 깨짐' } });
+    await goToNextScreen();
+
+    openReview();
+    const memo = screen.getByTestId('dev-feedback-review-memo');
+    expect(memo).toHaveValue('정렬이 깨짐');
+    fireEvent.change(memo, { target: { value: '정렬이 깨짐 — 두 번째 줄부터' } });
+
+    closeReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-send'));
+    await waitFor(() => expect(callsOn('dev:feedback:save')).toHaveLength(1));
+    expect(callsOn('dev:feedback:save')[0][1].marks[0].memo).toBe('정렬이 깨짐 — 두 번째 줄부터');
+  });
+
+  it('removes just that item, leaving the rest of the screen alone', async () => {
+    setup();
+    const first = openOverlay();
+    tap(first, 100, 100);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    tap(first, 400, 400);
+    fireEvent.change(screen.getByTestId('dev-feedback-memo'), { target: { value: '남아야 함' } });
+    await goToNextScreen();
+
+    openReview();
+    // ① of the two items on step 1 — the screen itself is untouched.
+    fireEvent.click(screen.getAllByTestId('dev-feedback-review-remove')[0]);
+
+    expect(screen.getAllByTestId('dev-feedback-review-memo')).toHaveLength(1);
+    closeReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-send'));
+    await waitFor(() => expect(callsOn('dev:feedback:save')).toHaveLength(1));
+    const payload = callsOn('dev:feedback:save')[0][1];
+    expect(payload.marks).toHaveLength(1);
+    expect(payload.marks[0].memo).toBe('남아야 함');
+    // The screen it was on is still in the flow.
+    expect(payload.seqs).toEqual([1]);
+  });
+
+  // The smallest unit for an earlier screen. A single mark cannot be picked
+  // there — its coordinates are in that screen's viewport — but one screen's
+  // share of a request can, and the other screen keeps its marks and its memo.
+  it('drops one screen’s share of an item that spans screens', async () => {
+    setup();
+    const first = openOverlay();
+    tap(first, 300, 300);
+    fireEvent.change(screen.getByTestId('dev-feedback-memo'), { target: { value: '한 요청' } });
+    const second = await goToNextScreen();
+    openReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-review-continue'));
+    tap(second, 500, 500);
+
+    // Two rows now — the same item under each screen it reaches.
+    openReview();
+    expect(screen.getAllByTestId('dev-feedback-review-memo')).toHaveLength(2);
+    fireEvent.click(screen.getAllByTestId('dev-feedback-review-drop-here')[0]);
+
+    // One row left, and the memo survived with it.
+    const left = screen.getAllByTestId('dev-feedback-review-memo');
+    expect(left).toHaveLength(1);
+    expect(left[0]).toHaveValue('한 요청');
+    closeReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-send'));
+    await waitFor(() => expect(callsOn('dev:feedback:save')).toHaveLength(1));
+    const payload = callsOn('dev:feedback:save')[0][1];
+    expect(payload.marks[0].parts).toHaveLength(1);
+    expect(payload.marks[0].memo).toBe('한 요청');
+  });
+
+  // Only on an item that spans screens: on a single-screen one it would be the
+  // same act as "remove", worded differently.
+  it('offers the per-screen drop only where it differs from removing the item', async () => {
+    setup();
+    const first = openOverlay();
+    tap(first, 300, 300);
+    await goToNextScreen();
+
+    openReview();
+    expect(screen.queryByTestId('dev-feedback-review-drop-here')).toBeNull();
+  });
+
+  // Dropping a screen still takes its items, and the panel covers the toolbar —
+  // so the notice has to be drawn in the panel's own header or it is announced
+  // into a covered spot.
+  it('says in the panel itself that dropping a screen took items with it', async () => {
+    setup();
+    const first = openOverlay();
+    tap(first, 300, 300);
+    await goToNextScreen();
+
+    openReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-step-drop'));
+
+    expect(screen.getByTestId('dev-feedback-review-notice').textContent).toContain('1');
+  });
+
+  // Capture numbers are reused once a screen is dropped, so a thumbnail kept
+  // past its screen would sit under a different one — the dropped screen's
+  // photograph presented as the live screen.
+  it('does not carry a dropped screen’s picture over to the one that reuses its number', async () => {
+    setup();
+    const first = openOverlay();
+    tap(first, 300, 300);
+    await goToNextScreen();
+
+    openReview();
+    const list = () => screen.getByTestId('dev-feedback-review-list');
+    await waitFor(() => expect(list().querySelectorAll('img')).toHaveLength(1));
+
+    fireEvent.click(screen.getByTestId('dev-feedback-step-drop'));
+
+    // Only the screen in hand is left, and it is not wearing that picture.
+    expect(list().querySelectorAll('img')).toHaveLength(0);
+  });
+
+  // The screen in hand has no picture and is not in the flow yet, but it must
+  // stand: without its row, what was just drawn has nowhere to be edited from.
+  it('stands the screen in hand last, without order handles', () => {
+    setup();
+    const canvas = openOverlay();
+    tap(canvas, 300, 300);
+
+    openReview();
+
+    expect(screen.getAllByTestId('dev-feedback-review-memo')).toHaveLength(1);
+    // Nothing frozen, so nothing to move or drop.
+    expect(screen.queryByTestId('dev-feedback-step-drop')).toBeNull();
+  });
+
+  // Nothing collected and nothing drawn means there is nothing to review.
+  it('locks the panel until there is something in it', () => {
+    setup();
+    openOverlay();
+    expect(screen.getByTestId('dev-feedback-review-open')).toBeDisabled();
+  });
+
+  // Escape means "stop picking", not "close the list I am picking from".
+  it('takes the merge picking down before the panel', () => {
+    setup();
+    const canvas = openOverlay();
+    tap(canvas, 100, 100);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    tap(canvas, 400, 400);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    openReview();
+    fireEvent.click(screen.getByTestId('dev-feedback-merge-start'));
+    expect(screen.getAllByTestId('dev-feedback-merge-pick')).toHaveLength(2);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.getByTestId('dev-feedback-review')).toBeTruthy();
+    expect(screen.queryByTestId('dev-feedback-merge-pick')).toBeNull();
+  });
+});
+
 describe('FeedbackOverlay — sending', () => {
   it('sends the route, the theme and one entry per group', async () => {
     document.documentElement.dataset.theme = 'dark';
@@ -356,7 +538,7 @@ describe('FeedbackOverlay — sending', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     expect(await screen.findByTestId('dev-feedback-canvas')).toBeTruthy();
     // The screen it froze is still collected, and the mark is still counted.
-    expect(screen.getByTestId('dev-feedback-flow-open')).toBeTruthy();
+    expect(screen.getByTestId('dev-feedback-review-open')).toBeEnabled();
     expect(screen.getByTestId('dev-feedback-send').textContent).toMatch(/1$/);
     consoleError.mockRestore();
   });
