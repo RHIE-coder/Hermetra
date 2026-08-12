@@ -543,3 +543,29 @@ describe('FeedbackOverlay — sending', () => {
     consoleError.mockRestore();
   });
 });
+
+/**
+ * The title bar is the window's drag region, and a drag region swallows the
+ * mouse for anything drawn over it that has not opted out — which is how the
+ * top-docked toolbar's buttons came to be dead. Only the opt-out is assertable
+ * here: `-webkit-app-region` is resolved by the window, not by the page, so no
+ * headless test can press the button and watch it fail.
+ */
+describe('FeedbackOverlay — the window drag region', () => {
+  const root = () => document.querySelector('[data-hermetra-feedback]') as HTMLElement;
+
+  it('opts the whole overlay out while it is open', () => {
+    setup();
+    openOverlay();
+    expect(root().classList.contains('no-drag')).toBe(true);
+  });
+
+  it('opts the handle out but leaves the title bar draggable when folded away', () => {
+    setup();
+    // Parked high, the handle itself reaches into the bar.
+    expect(screen.getByTestId('dev-feedback-handle').classList.contains('no-drag')).toBe(true);
+    // The full-screen layer must not subtract the bar while nothing is open,
+    // or the window stops being movable for the rest of the session.
+    expect(root().classList.contains('no-drag')).toBe(false);
+  });
+});

@@ -797,7 +797,9 @@ export function FeedbackOverlay() {
           onPointerMove={onHandleMove}
           onPointerUp={onHandleUp}
           style={{ top: `${handleTop}%` }}
-          className={`pointer-events-auto absolute right-0 flex h-24 w-5 -translate-y-1/2 touch-none items-center justify-end ${handleFade}`}
+          // `no-drag` because the handle can be parked high enough to reach the
+          // title bar — see the note on the open overlay's root below.
+          className={`no-drag pointer-events-auto absolute right-0 flex h-24 w-5 -translate-y-1/2 touch-none items-center justify-end ${handleFade}`}
         >
           <span className="h-16 w-1.5 rounded-l-full bg-primary" />
         </button>
@@ -822,7 +824,19 @@ export function FeedbackOverlay() {
   }
 
   return (
-    <div {...{ [FEEDBACK_ATTR]: '' }} className="fixed inset-0 z-[200] touch-none">
+    // `no-drag` over the whole overlay. The title bar is the window's drag
+    // region (`-webkit-app-region: drag`, 36px tall), and a drag region eats
+    // mouse events for everything painted on top of it unless that thing opts
+    // out — z-index does not enter into it. The toolbar docked to the top sits
+    // inside those 36px, so its buttons were dead for all but the few pixels
+    // hanging below the bar: a press that landed in the band did nothing and
+    // one that landed under it worked, which reads as "Send is flaky". The same
+    // band also swallowed marking, so the title bar could not be pointed at.
+    // Subtracting the whole overlay is the honest fix — while a round is being
+    // marked the screen is deliberately frozen, so nothing here wants to drag
+    // the window. Closed, the overlay leaves the region alone (only the handle
+    // opts out) and the title bar drags again.
+    <div {...{ [FEEDBACK_ATTR]: '' }} className="no-drag fixed inset-0 z-[200] touch-none">
       {/* The canvas. It does not dim what is behind it — you have to keep
           seeing the problem while marking it. */}
       <svg
