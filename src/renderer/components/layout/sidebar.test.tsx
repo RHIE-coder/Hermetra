@@ -131,7 +131,8 @@ describe('Sidebar — no accent, selection reads as depth', () => {
     const { container } = renderSidebar('/');
     const cards = container.querySelectorAll('nav > section');
 
-    expect(cards).toHaveLength(2);
+    // Studio, Data Pipeline, Legacy.
+    expect(cards).toHaveLength(3);
     for (const card of cards) {
       expect(card.className).toContain('bg-card');
       expect(card.className).toContain('shadow');
@@ -237,6 +238,54 @@ describe('Sidebar — the legacy drawer', () => {
     for (const [testId, href] of hrefs) {
       expect((screen.getByTestId(testId) as HTMLAnchorElement).getAttribute('href')).toBe(href);
     }
+  });
+});
+
+/**
+ * Spec: `docs/spec/studio/README.md`.
+ *
+ * The browser bench sat inside the Data Pipeline drawer until 2026-08-12. It is
+ * not a stage — it is where a stage gets made — and while it sat among the six
+ * the rail said otherwise, which is the one thing the rail must never do
+ * (`AC-app.shell.sidebar-06`). What matters here is the separation itself: the
+ * bench is reachable, and it is *not* inside the pipeline drawer.
+ */
+describe('Sidebar — the Studio drawer is outside the pipeline', () => {
+  it('carries the browser bench at its own route', () => {
+    renderSidebar();
+    const row = screen.getByTestId('nav-studio-browser') as HTMLAnchorElement;
+    expect(row.getAttribute('href')).toBe('/studio/browser');
+  });
+
+  it('keeps it out of the Data Pipeline drawer', () => {
+    // The assertion that would have caught the old arrangement: same drawer as
+    // the six stages means the rail is calling the bench a stage.
+    const { container } = renderSidebar();
+    const drawers = [...container.querySelectorAll('nav > section')];
+
+    const benchDrawer = drawers.find((d) => d.querySelector('[data-testid="nav-studio-browser"]'));
+    const stageDrawer = drawers.find((d) => d.querySelector('[data-testid="nav-pipeline-sources"]'));
+
+    expect(benchDrawer).toBeDefined();
+    expect(stageDrawer).toBeDefined();
+    expect(benchDrawer).not.toBe(stageDrawer);
+  });
+
+  it('sits above the pipeline — a stage is built before it is run', () => {
+    const { container } = renderSidebar();
+    const bench = screen.getByTestId('nav-studio-browser');
+    const stages = screen.getByTestId('nav-pipeline-jobs');
+    expect(
+      bench.compareDocumentPosition(stages) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(container.querySelector('[data-testid="nav-studio-toggle"]')).toBeInTheDocument();
+  });
+
+  it('leaves `작업` behind in the pipeline, still first of the six', () => {
+    // Only the bench moved. Jobs keeps its place and its promise.
+    renderSidebar();
+    const jobs = screen.getByTestId('nav-pipeline-jobs') as HTMLAnchorElement;
+    expect(jobs.getAttribute('href')).toBe('/pipeline/jobs');
   });
 });
 

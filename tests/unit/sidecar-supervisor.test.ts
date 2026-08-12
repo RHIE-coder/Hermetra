@@ -6,7 +6,7 @@ import { SidecarSupervisor, type SidecarProcess } from '@main/sidecar/supervisor
  * the restart policy and knows nothing about `child_process`. A fake process is
  * injected, so every branch here runs with no spawning and no timers.
  *
- * Spec: docs/spec/pipeline/README.md — `pipeline.sidecar`.
+ * Spec: docs/spec/studio/README.md — `studio.sidecar`.
  */
 
 /** A process the test drives by hand. */
@@ -31,16 +31,22 @@ function fakeProcess() {
 
 function makeSupervisor(over: Partial<{ maxRestarts: number }> = {}) {
   const spawned: ReturnType<typeof fakeProcess>[] = [];
+  const spawnedWith: { headless: boolean }[] = [];
   const timers: { fn: () => void; ms: number }[] = [];
   const sup = new SidecarSupervisor({
-    spawn: () => { const p = fakeProcess(); spawned.push(p); return p; },
+    spawn: (opts) => {
+      spawnedWith.push(opts);
+      const p = fakeProcess();
+      spawned.push(p);
+      return p;
+    },
     // Deterministic: no real clock, no real timers.
     schedule: (fn, ms) => { timers.push({ fn, ms }); return timers.length - 1; },
     cancel: () => {},
     backoffMs: (attempt) => attempt * 1000,
     maxRestarts: over.maxRestarts ?? 3,
   });
-  return { sup, spawned, timers, runTimer: (i = 0) => timers[i]!.fn() };
+  return { sup, spawned, spawnedWith, timers, runTimer: (i = 0) => timers[i]!.fn() };
 }
 
 describe('SidecarSupervisor — reaching ready', () => {
@@ -176,6 +182,45 @@ describe('SidecarSupervisor — stopping is deliberate', () => {
     sup.start();
     expect(sup.status().phase).toBe('starting');
     expect(sup.status().restarts).toBe(0);
+  });
+});
+
+describe('SidecarSupervisor — headed is a choice the launch has to carry', () => {
+  it('is headless unless asked otherwise, and says which it is', () => {
+    const { sup, spawnedWith } = makeSupervisor();
+    sup.start();
+    expect(spawnedWith[0]).toEqual({ headless: true });
+    expect(sup.status().headless).toBe(true);
+  });
+
+  it('spawns headed when asked, and reports that', () => {
+    const { sup, spawnedWith } = makeSupervisor();
+    sup.start({ headless: false });
+    expect(spawnedWith[0]).toEqual({ headless: false });
+    expect(sup.status().headless).toBe(false);
+  });
+
+  it('restarts in the mode it was started in', () => {
+    // A crash that quietly brings the browser back invisible is a browser the
+    // user thinks they are watching and is not.
+    const { sup, spawned, spawnedWith, runTimer } = makeSupervisor();
+    sup.start({ headless: false });
+    spawned[0]!.emitExit(1);
+    runTimer(0);
+
+    expect(spawnedWith[1]).toEqual({ headless: false });
+    expect(sup.status().headless).toBe(false);
+  });
+
+  it('keeps the chosen mode across a deliberate stop', () => {
+    // The toggle is the person's setting, not the run's — stopping must not
+    // silently move it back.
+    const { sup, spawned } = makeSupervisor();
+    sup.start({ headless: false });
+    sup.stop();
+    spawned[0]!.emitExit(null, 'SIGTERM');
+    expect(sup.status().phase).toBe('stopped');
+    expect(sup.status().headless).toBe(false);
   });
 });
 

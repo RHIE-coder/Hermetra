@@ -2,7 +2,7 @@
 core: steward
 managed_by: steward
 schema_version: 1
-feature: dev-feedback-review-panel
+feature: studio-split
 phases:
   - intake
   - spec

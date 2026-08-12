@@ -35,6 +35,21 @@ interface NavShelf {
   items: NavItem[];
 }
 
+/**
+ * The Studio drawer: where a stage gets made, which is not a stage.
+ *
+ * One item because there is one, not because a drawer wants one — the drawer's
+ * band is what says "outside the pipeline", and that band is the whole point of
+ * not folding this into the six below (`docs/spec/studio/README.md`).
+ */
+const studioShelves: NavShelf[] = [
+  {
+    items: [
+      { to: '/studio/browser', labelKey: 'sidebar.studio.browser', icon: Terminal, testId: 'nav-studio-browser' },
+    ],
+  },
+];
+
 /** The Data Pipeline drawer: six stage screens, no shelves — the order is the pipeline. */
 const pipelineShelves: NavShelf[] = [
   {
@@ -76,12 +91,13 @@ const legacyShelves: NavShelf[] = [
   },
 ];
 
+const STUDIO_OPEN_KEY = 'hermetra.sidebar.studioOpen';
 const PIPELINE_OPEN_KEY = 'hermetra.sidebar.pipelineOpen';
 const LEGACY_OPEN_KEY = 'hermetra.sidebar.legacyOpen';
 
 /**
  * Each drawer remembers how you left it; the fallback is only ever the first
- * launch. Data Pipeline opens, Legacy does not.
+ * launch. Studio and Data Pipeline open, Legacy does not.
  *
  * Both used to open, because every screen this app had lived in one drawer and
  * starting collapsed would have hidden the app from itself. Fifteen rows no
@@ -222,6 +238,14 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-2 overflow-y-auto p-2">
+        {/* Above the pipeline because you build a stage before you run one. */}
+        <NavDrawer
+          titleKey="sidebar.group.studio"
+          toggleTestId="nav-studio-toggle"
+          storageKey={STUDIO_OPEN_KEY}
+          defaultOpen
+          shelves={studioShelves}
+        />
         <NavDrawer
           titleKey="sidebar.group.pipeline"
           toggleTestId="nav-pipeline-toggle"

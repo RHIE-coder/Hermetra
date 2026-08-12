@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { ScriptFile, ScriptFileBody, ScriptMoveRequest } from '@shared/types/web';
 import { workspaceManager } from './workspaceManager';
 
-type Slot = 'web' | 'mobile';
+type Slot = 'web' | 'mobile' | 'studio';
 
 const SCRIPT_EXT = /\.(ts|js|tsx|jsx)$/i;
 
@@ -38,8 +38,69 @@ await el.click();
 log('login tapped');
 `;
 
+/**
+ * The studio slot stores **functions**, not snippets.
+ *
+ * A stage references a script by the function it exports — `extract` for
+ * ingestion, `transform` for processing — so a file of top-level statements has
+ * nothing a stage can point at. Reuse is then plain `import`: shared logins and
+ * paging live in their own files and are called from wherever, rather than
+ * being copied into a per-stage folder.
+ *
+ * Do not write a literal `import … from '…'` statement inside these seeds.
+ * electron-vite's CommonJS shim scans the emitted chunk for import statements
+ * and inserts its `__dirname` declaration after the last one it finds — a line
+ * that merely looks like one, inside a template literal, sends that declaration
+ * into the string and leaves the real `__dirname` undefined. The main process
+ * then dies on boot with no window.
+ */
+const SEED_STUDIO = `// Stage script. Stages reference the functions this exports.
+//   extract(page, ctx)  → ingestion. Returns raw rows, unchanged.
+//   transform(raw)      → processing. Reshapes them for storage.
+//
+// Reuse needs nothing new: put a shared step in its own file under lib/ and
+// pull it in with an ordinary ES module import.
+
+export async function extract(page, ctx) {
+  await page.goto(ctx.url ?? 'https://example.com');
+  return page.$$eval('h1', (els) => els.map((el) => ({ title: el.textContent })));
+}
+
+export function transform(raw) {
+  return raw.map((row) => ({ ...row, title: row.title?.trim() }));
+}
+`;
+
+/**
+ * The studio slot was called `pipeline` until 2026-08-12, when the browser
+ * workbench moved out of the Data Pipeline service (`docs/spec/studio/`).
+ *
+ * A slot is a directory holding files a person wrote, so renaming it in the code
+ * alone would not rename anything — it would hide their scripts behind a name
+ * nothing reads, and `seedIfEmpty` would then drop a starter file into the empty
+ * new folder. That reads as "my scripts are gone".
+ *
+ * Both folders existing means a half-finished move, or an older build writing
+ * again after a newer one migrated. The new one is live and the old one is left
+ * alone — merging two folders would have to guess which side of a name clash to
+ * keep, and guessing wrong overwrites work.
+ */
+function migrateLegacySlot(root: string, slot: Slot): void {
+  if (slot !== 'studio') return;
+  const legacy = path.join(root, 'pipeline');
+  const current = path.join(root, slot);
+  if (!fs.existsSync(legacy) || fs.existsSync(current)) return;
+  fs.renameSync(legacy, current);
+}
+
 function dir(slot: Slot): string {
-  const d = path.join(workspaceManager().activeDir(), 'scripts', slot);
+  const root = path.join(workspaceManager().activeDir(), 'scripts');
+  // Before the mkdir below: creating the new folder first would make the move
+  // look like the both-folders-exist case and strand the old one forever.
+  fs.mkdirSync(root, { recursive: true });
+  migrateLegacySlot(root, slot);
+
+  const d = path.join(root, slot);
   fs.mkdirSync(d, { recursive: true });
   return d;
 }
@@ -54,13 +115,16 @@ function safePath(slot: Slot, p: string): string {
 }
 
 function seedIfEmpty() {
-  const webDir = dir('web');
-  const mobileDir = dir('mobile');
-  if (fs.readdirSync(webDir).length === 0) {
-    fs.writeFileSync(path.join(webDir, 'login.ts'), SEED_WEB, 'utf-8');
-  }
-  if (fs.readdirSync(mobileDir).length === 0) {
-    fs.writeFileSync(path.join(mobileDir, 'verify-otp.ts'), SEED_MOBILE, 'utf-8');
+  const seeds: [Slot, string, string][] = [
+    ['web', 'login.ts', SEED_WEB],
+    ['mobile', 'verify-otp.ts', SEED_MOBILE],
+    ['studio', 'example.ts', SEED_STUDIO],
+  ];
+  for (const [slot, name, source] of seeds) {
+    const root = dir(slot);
+    if (fs.readdirSync(root).length === 0) {
+      fs.writeFileSync(path.join(root, name), source, 'utf-8');
+    }
   }
 }
 

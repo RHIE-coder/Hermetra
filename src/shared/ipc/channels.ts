@@ -28,7 +28,11 @@ import type {
   InspectorElement,
 } from '../types/mobile';
 import type { VariablesDocument } from '../types/variables';
-import type { SidecarStatus } from '../types/pipeline';
+import type {
+  StudioLogLine,
+  StudioSessionStatus,
+  SidecarStatus,
+} from '../types/studio';
 import type {
   FeedbackRequest,
   FeedbackSaveResult,
@@ -177,12 +181,30 @@ export const CHANNELS = {
   EVT_BROWSER_UPDATE: 'evt:browser:update',
   EVT_WORKSPACE_UPDATE: 'evt:workspace:update',
   EVT_BROWSER_INSTALL: 'evt:browser:install',
-  EVT_SIDECAR_UPDATE: 'evt:pipeline:sidecar',
+  EVT_SIDECAR_UPDATE: 'evt:studio:sidecar',
+  EVT_STUDIO_SESSION: 'evt:studio:session',
+  EVT_STUDIO_LOG: 'evt:studio:log',
 
-  // Data pipeline — the fetch sidecar (see shared/types/pipeline.ts)
-  PIPELINE_SIDECAR_STATUS: 'pipeline:sidecar:status',
-  PIPELINE_SIDECAR_START: 'pipeline:sidecar:start',
-  PIPELINE_SIDECAR_STOP: 'pipeline:sidecar:stop',
+  // Data pipeline — the fetch sidecar (see shared/types/studio.ts)
+  STUDIO_SIDECAR_STATUS: 'studio:sidecar:status',
+  STUDIO_SIDECAR_START: 'studio:sidecar:start',
+  STUDIO_SIDECAR_STOP: 'studio:sidecar:stop',
+
+  // Data pipeline — driving the browser the sidecar started
+  STUDIO_SESSION_STATUS: 'studio:session:status',
+  STUDIO_SESSION_NAVIGATE: 'studio:session:navigate',
+  STUDIO_SESSION_NEW_TAB: 'studio:session:new-tab',
+  STUDIO_SESSION_CLOSE_PAGE: 'studio:session:close-page',
+  STUDIO_SESSION_SET_ACTIVE: 'studio:session:set-active',
+  STUDIO_SESSION_RUN: 'studio:session:run',
+
+  // Data pipeline — its own script slot
+  STUDIO_SCRIPTS_LIST: 'studio:scripts:list',
+  STUDIO_SCRIPTS_READ: 'studio:scripts:read',
+  STUDIO_SCRIPTS_SAVE: 'studio:scripts:save',
+  STUDIO_SCRIPTS_DELETE: 'studio:scripts:delete',
+  STUDIO_SCRIPTS_MKDIR: 'studio:scripts:mkdir',
+  STUDIO_SCRIPTS_MOVE: 'studio:scripts:move',
 } as const;
 
 export type ChannelName = typeof CHANNELS[keyof typeof CHANNELS];
@@ -286,10 +308,30 @@ export interface IpcContract {
   [CHANNELS.EVT_WORKSPACE_UPDATE]: { input: never; output: WorkspaceState };
   [CHANNELS.EVT_BROWSER_INSTALL]: { input: never; output: BrowserInstallLog };
   [CHANNELS.EVT_SIDECAR_UPDATE]: { input: never; output: SidecarStatus };
+  [CHANNELS.EVT_STUDIO_SESSION]: { input: never; output: StudioSessionStatus };
+  [CHANNELS.EVT_STUDIO_LOG]: { input: never; output: StudioLogLine };
 
-  [CHANNELS.PIPELINE_SIDECAR_STATUS]: { input: void; output: SidecarStatus };
-  [CHANNELS.PIPELINE_SIDECAR_START]: { input: void; output: SidecarStatus };
-  [CHANNELS.PIPELINE_SIDECAR_STOP]: { input: void; output: SidecarStatus };
+  [CHANNELS.STUDIO_SIDECAR_STATUS]: { input: void; output: SidecarStatus };
+  [CHANNELS.STUDIO_SIDECAR_START]: { input: { headless?: boolean }; output: SidecarStatus };
+  [CHANNELS.STUDIO_SIDECAR_STOP]: { input: void; output: SidecarStatus };
+
+  [CHANNELS.STUDIO_SESSION_STATUS]: { input: void; output: StudioSessionStatus };
+  [CHANNELS.STUDIO_SESSION_NAVIGATE]: { input: { url: string }; output: BrowserPage[] };
+  [CHANNELS.STUDIO_SESSION_NEW_TAB]: { input: { url?: string }; output: BrowserPage[] };
+  [CHANNELS.STUDIO_SESSION_CLOSE_PAGE]: { input: { index: number }; output: BrowserPage[] };
+  [CHANNELS.STUDIO_SESSION_SET_ACTIVE]: { input: { index: number }; output: BrowserPage[] };
+  [CHANNELS.STUDIO_SESSION_RUN]: {
+    /** `url` is what is in the address bar; a stage script reads it as `ctx.url`. */
+    input: { source: string; url?: string };
+    output: WebScriptRunResult;
+  };
+
+  [CHANNELS.STUDIO_SCRIPTS_LIST]: { input: void; output: ScriptFile[] };
+  [CHANNELS.STUDIO_SCRIPTS_READ]: { input: { path: string }; output: ScriptFileBody };
+  [CHANNELS.STUDIO_SCRIPTS_SAVE]: { input: ScriptFileBody; output: ScriptFile[] };
+  [CHANNELS.STUDIO_SCRIPTS_DELETE]: { input: { path: string }; output: ScriptFile[] };
+  [CHANNELS.STUDIO_SCRIPTS_MKDIR]: { input: { path: string }; output: ScriptFile[] };
+  [CHANNELS.STUDIO_SCRIPTS_MOVE]: { input: { moves: ScriptMoveRequest[] }; output: ScriptFile[] };
 
   [CHANNELS.WORKSPACE_LIST]: { input: void; output: WorkspaceState };
   [CHANNELS.WORKSPACE_SAVE]: { input: Workspace; output: WorkspaceState };

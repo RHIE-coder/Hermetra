@@ -18,6 +18,10 @@
 레거시 한 장으로 접힌 것은 파이프라인이 레일의 위를 갖기 위해서였고, 이름이 그 순서를 이미
 말하고 있다.
 
+스튜디오 서랍은 **파이프라인 밖**이다. 파이프라인의 여섯이 재료 창고라면 스튜디오는 그 재료를
+만드는 자리이고, 어느 단계에도 속하지 않는다 — 서랍의 머리띠가 그 경계를 말한다. 항목 하나짜리
+서랍인 것은 지금 하나뿐이기 때문이지 하나여야 하기 때문이 아니다(→ `studio.browser`).
+
 파이프라인 서랍은 선반 없이 항목 여섯이다 — 그 순서가 곧 파이프라인이다. 레거시 서랍은 선반
 셋을 갖는다. 카드 셋으로 세우지 않는 이유는 그룹 제목이 이 레일에서 full-bleed 띠를 갖기
 때문이다 — 띠 안의 띠는 서로 경쟁하는 두 머리로 읽힌다. 한 단 내려간 선반은 얇은 muted
@@ -28,6 +32,7 @@
 
 | 서랍 | 선반 | 항목 (라우트 / testid) |
 |---|---|---|
+| 스튜디오 | — | 브라우저 작업대 `/studio/browser` `nav-studio-browser` |
 | 데이터 파이프라인 | — | 작업 `/pipeline/jobs` `nav-pipeline-jobs` · 소스 `/pipeline/sources` `nav-pipeline-sources` · 수집 `/pipeline/ingestion` `nav-pipeline-ingestion` · 처리 `/pipeline/processing` `nav-pipeline-processing` · 저장소 `/pipeline/storage` `nav-pipeline-storage` · 인사이트 `/pipeline/insights` `nav-pipeline-insights` |
 | 레거시 | 웹 | 브라우저 `/web/remote` `nav-web-remote` · 스크립트 `/web/code` `nav-web-code` |
 | 레거시 | 모바일 | 디바이스 `/mobile/devices` `nav-mobile-devices` · 스크립트 `/mobile/code` `nav-mobile-code` · 인스펙터 `/mobile/inspector` `nav-mobile-inspector` |
@@ -35,12 +40,14 @@
 
 인수조건:
 
-- `AC-app.shell.sidebar-01` 서랍 둘이 다 열려 있으면 항목 15개가 렌더된다. 각 항목의
+- `AC-app.shell.sidebar-01` 서랍 셋이 다 열려 있으면 항목 16개가 렌더된다. 각 항목의
   `data-testid` 는 위 표와 일치한다(e2e 와 표면 어댑터가 이 ID로 화면을 찾는다).
-- `AC-app.shell.sidebar-04` **첫 실행에 데이터 파이프라인은 열려 있고 레거시는 접혀 있다.**
-  둘 다 열면 1024x720 레일이 31px 모자라 마지막 행이 잘린다 — 이름이 "레거시" 인 쪽이
-  양보한다. 이건 첫 실행 값일 뿐이고, 사용자가 접거나 편 뒤에는 그쪽이 이긴다. 앱이 그것을
-  뒤집지 않는다.
+- `AC-app.shell.sidebar-04` **첫 실행에 스튜디오와 데이터 파이프라인은 열려 있고 레거시는
+  접혀 있다.** 셋 다 열면 1024x720 레일이 부족해 마지막 행이 잘린다 — 이름이 "레거시" 인 쪽이
+  양보한다. 스튜디오가 서랍 하나만큼(머리띠 + 행 하나)을 더 쓰기 때문에 그 부족분은 레거시를
+  접기 전 기준으로 31px 에서 더 벌어졌고, 그래도 양보 순서는 같다. 이건 첫 실행 값일 뿐이고,
+  사용자가 접거나 편 뒤에는 그쪽이 이긴다. 앱이 그것을 뒤집지 않는다. 잘린 행은 결함이 아니라
+  스크롤로 닿는 상태다(`AC-app.shell.sidebar-07`).
 - `AC-app.shell.sidebar-05` 한 서랍을 접으면 그 서랍의 항목만 DOM 에서 사라진다. 다른 서랍의
   열림 상태도, 그 기억도 건드리지 않는다.
 - `AC-app.shell.sidebar-06` 파이프라인 항목 여섯은 **파이프라인 순서**로 놓인다

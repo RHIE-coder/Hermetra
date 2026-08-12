@@ -19,6 +19,7 @@ import { VariableBusPage } from './modules/bridge/pages/VariableBusPage';
 import { EventStreamPage } from './modules/bridge/pages/EventStreamPage';
 import { VariablesPage } from './modules/bridge/pages/VariablesPage';
 
+import { BrowserPage } from './modules/studio/pages/BrowserPage';
 import { JobsPage } from './modules/pipeline/pages/JobsPage';
 import { SourcesPage } from './modules/pipeline/pages/SourcesPage';
 import { IngestionPage } from './modules/pipeline/pages/IngestionPage';
@@ -66,6 +67,10 @@ export function App() {
         {/* The landing screen stays Scenarios: every Data Pipeline screen is a
             shell, and booting the app onto an empty one would read as broken. */}
         <Route index element={<Navigate to="/bridge/scenarios" replace />} />
+        <Route path="studio">
+          <Route index element={<Navigate to="browser" replace />} />
+          <Route path="browser" element={<BrowserPage />} />
+        </Route>
         <Route path="pipeline">
           <Route index element={<Navigate to="jobs" replace />} />
           <Route path="jobs" element={<JobsPage />} />

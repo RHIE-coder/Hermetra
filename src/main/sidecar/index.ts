@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SidecarSupervisor, type SidecarProcess } from './supervisor';
+import { SidecarSupervisor, type SidecarLaunchOptions, type SidecarProcess } from './supervisor';
+import { hostSpoofOs } from './spoof';
 
 /**
  * The infrastructure half: turns a real child process into the handle the
@@ -49,6 +50,72 @@ export function resolveLauncher(dirname: string): string | null {
 }
 
 /**
+ * Where the Camoufox browser lives.
+ *
+ * `camoufox-js` defaults to a per-user cache directory and downloads into it on
+ * first use — a 700 MB stall the first time someone presses start, and nothing
+ * at all on a machine with no network. A packaged app therefore ships its own
+ * copy under `resources/camoufox/`, staged by `scripts/bundle-camoufox.mjs`,
+ * and points the child at it with `CAMOUFOX_INSTALL_DIR`.
+ *
+ * Order matches `resolveNodeRuntime()`: an explicit override is trusted first,
+ * then the bundled copy. Returning null is the third answer and a good one —
+ * with the variable unset, `camoufox-js` uses its own cache, which is what a
+ * `npm run dev` checkout wants.
+ *
+ * `version.json` is what makes a directory count. A packaging step that died
+ * midway leaves the folder there but unusable, and pointing at that is worse
+ * than pointing at nothing: it reads as installed and then fails to launch.
+ */
+export function resolveCamoufoxDir(
+  env: NodeJS.ProcessEnv = process.env,
+  resourcesPath: string | undefined = process.resourcesPath,
+): string | null {
+  const staged = (dir: string) => (fs.existsSync(path.join(dir, 'version.json')) ? dir : null);
+
+  const explicit = env.CAMOUFOX_INSTALL_DIR;
+  if (explicit) return fs.existsSync(explicit) ? explicit : null;
+
+  if (!resourcesPath) return null;
+  return staged(path.join(resourcesPath, 'camoufox'));
+}
+
+/**
+ * The launch mode travels to the child as one environment variable, because a
+ * child that is a different runtime cannot be handed an object.
+ *
+ * `launcher.mjs` treats `'0'` as the only value meaning "give it a window", so
+ * the headless case is written explicitly rather than left unset — an inherited
+ * value from the developer's shell must not decide this.
+ *
+ * The OS the browser claims rides along the same way — see `spoof.ts` for why it
+ * is decided here rather than left to Camoufox.
+ */
+export function sidecarEnv(
+  base: NodeJS.ProcessEnv,
+  opts: SidecarLaunchOptions,
+  resourcesPath: string | undefined = process.resourcesPath,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...base,
+    HERMETRA_SIDECAR_HEADLESS: opts.headless ? '1' : '0',
+  };
+
+  // Written or deleted, never left to whatever the shell had: an inherited value
+  // would decide what the browser claims to be, and an empty string would reach
+  // Camoufox as an OS it rejects.
+  const spoofOs = hostSpoofOs();
+  if (spoofOs) env.HERMETRA_SIDECAR_OS = spoofOs;
+  else delete env.HERMETRA_SIDECAR_OS;
+  // Only when there is one. `camoufox-js` reads this at module load and an
+  // empty or wrong value is not the same as an absent one.
+  const camoufox = resolveCamoufoxDir(base, resourcesPath);
+  if (camoufox) env.CAMOUFOX_INSTALL_DIR = camoufox;
+  else delete env.CAMOUFOX_INSTALL_DIR;
+  return env;
+}
+
+/**
  * Wraps a child so the supervisor sees whole lines.
  *
  * stdout arrives in arbitrary chunks — an endpoint can be split across two of
@@ -89,7 +156,7 @@ export function toSidecarProcess(child: {
 
 export function createSidecarSupervisor(dirname: string): SidecarSupervisor {
   return new SidecarSupervisor({
-    spawn: () => {
+    spawn: (launch) => {
       const node = resolveNodeRuntime();
       const launcher = resolveLauncher(dirname);
       if (!node || !launcher) {
@@ -106,7 +173,7 @@ export function createSidecarSupervisor(dirname: string): SidecarSupervisor {
       const child = spawn(node, [launcher], {
         cwd: path.dirname(launcher),
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env },
+        env: sidecarEnv(process.env, launch),
       });
       child.stderr?.setEncoding('utf8');
       child.stderr?.on('data', (d: string) => process.stderr.write(d));

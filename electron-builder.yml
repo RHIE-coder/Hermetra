@@ -22,9 +22,16 @@ files:
 
 # 앱 코드가 아니라 **함께 실려야 하는 런타임**. resources/node/ 는 scripts/bundle-node.mjs 가
 # 채우고, main 의 resolveNodeRuntime() 이 process.resourcesPath 아래에서 이 경로를 찾는다.
+#
+# camoufox 도 같은 이유로 여기 있다. 없으면 앱은 브라우저가 없는 채로 설치되고, 처음 "브라우저
+# 켜기" 를 누른 사람이 700MB 를 기다리거나 (네트워크가 없으면) 아예 못 쓴다. 대신 앱이 커진다 —
+# 실측 719MB(폰트만 362MB). 폰트는 지문의 일부라 덜어내면 Camoufox 를 쓰는 이유가 없어진다.
+# resolveCamoufoxDir() 이 이 경로를 찾아 자식에게 CAMOUFOX_INSTALL_DIR 로 넘긴다.
 extraResources:
   - from: resources/node
     to: node
+  - from: resources/camoufox
+    to: camoufox
 
 mac:
   category: public.app-category.developer-tools

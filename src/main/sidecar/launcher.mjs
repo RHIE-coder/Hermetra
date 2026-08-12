@@ -18,12 +18,23 @@ const say = (msg) => process.stderr.write(`[sidecar] ${msg}\n`);
 
 let server = null;
 
+/**
+ * The OS the browser should claim — `src/main/sidecar/spoof.ts` decides it and
+ * says why. Absent means "let Camoufox pick", which is the old behaviour and the
+ * right answer on a platform it has no font set for.
+ */
+function spoofOptions() {
+  const os = process.env.HERMETRA_SIDECAR_OS;
+  return os ? { os } : {};
+}
+
 async function main() {
   const headless = process.env.HERMETRA_SIDECAR_HEADLESS !== '0';
-  say(`starting camoufox (headless=${headless})`);
+  const spoof = spoofOptions();
+  say(`starting camoufox (headless=${headless}, os=${spoof.os ?? 'random'})`);
 
   const { launchServer } = await import('camoufox-js');
-  server = await launchServer({ headless });
+  server = await launchServer({ headless, ...spoof });
 
   const endpoint = server.wsEndpoint();
   say(`ready at ${endpoint}`);

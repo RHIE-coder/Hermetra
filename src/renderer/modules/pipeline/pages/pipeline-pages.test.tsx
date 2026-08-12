@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { I18nProvider } from '@/lib/i18n';
 import { messages } from '@/lib/messages';
-import { JobsPage } from './JobsPage';
 import { SourcesPage } from './SourcesPage';
 import { IngestionPage } from './IngestionPage';
 import { ProcessingPage } from './ProcessingPage';
@@ -22,10 +21,12 @@ import { InsightsPage } from './InsightsPage';
  *
  * These screens hold no state and touch no IPC — there is deliberately nothing
  * to mock. What is worth pinning is the contract the rest of the harness reads.
+ *
+ * Jobs is not here any more: it is the workbench and has state, so it owns
+ * `BrowserPage.test.tsx` under `modules/studio`. Jobs is a placeholder like the rest.
  */
 
 const SCREENS = [
-  { name: 'Jobs', Page: JobsPage, testId: 'page-pipeline-jobs', titleKey: 'pipeline.jobs.title' },
   { name: 'Sources', Page: SourcesPage, testId: 'page-pipeline-sources', titleKey: 'pipeline.sources.title' },
   { name: 'Ingestion', Page: IngestionPage, testId: 'page-pipeline-ingestion', titleKey: 'pipeline.ingestion.title' },
   { name: 'Processing', Page: ProcessingPage, testId: 'page-pipeline-processing', titleKey: 'pipeline.processing.title' },

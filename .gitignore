@@ -162,4 +162,6 @@ vite.config.ts.timestamp-*
 # packaging
 release/
 resources/node/
+# 719MB. scripts/bundle-camoufox.mjs 가 packaging 때 채운다.
+resources/camoufox/
 .cache/

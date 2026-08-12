@@ -48,6 +48,7 @@ UI 라벨은 ID가 아니다 — 라벨은 `src/renderer/lib/messages.ts` 의 en
 
 | Service | Surface ID | 라우트 | nav testid | 정본 |
 |---|---|---|---|---|
+| studio | `studio.browser` | `/studio/browser` | `nav-studio-browser` | `studio/browser.md` |
 | pipeline | `pipeline.jobs` | `/pipeline/jobs` | `nav-pipeline-jobs` | `pipeline/jobs.md` |
 | pipeline | `pipeline.sources` | `/pipeline/sources` | `nav-pipeline-sources` | `pipeline/sources.md` |
 | pipeline | `pipeline.ingestion` | `/pipeline/ingestion` | `nav-pipeline-ingestion` | `pipeline/ingestion.md` |

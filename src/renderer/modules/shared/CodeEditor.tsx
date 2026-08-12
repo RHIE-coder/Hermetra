@@ -110,7 +110,11 @@ function buildTree(items: ScriptFile[]): TreeNode[] {
 type PendingCreate = { kind: 'file' | 'folder'; parent: string };
 
 interface Props {
-  accent: 'web' | 'mobile';
+  /**
+   * Which area owns this editor. `pipeline` has no area colour on purpose —
+   * the rail dropped its accents, and the pipeline never had one.
+   */
+  accent: 'web' | 'mobile' | 'pipeline';
   titleKey: MessageKey;
   subtitleKey: MessageKey;
   scripts: ScriptFile[];
@@ -121,6 +125,12 @@ interface Props {
   ready: boolean;
   busy: boolean;
   rightHeader?: React.ReactNode;
+  /**
+   * Rendered full width between the header and the tree/editor grid. The
+   * pipeline puts its browser bar here: the tabs it lists belong to the session
+   * the editor runs against, so they have to sit above both columns.
+   */
+  beforeGrid?: React.ReactNode;
   defaultSeed: string;
   testId?: string;
   onLoad: (path: string) => Promise<void>;
@@ -149,6 +159,7 @@ export function CodeEditor({
   ready,
   busy,
   rightHeader,
+  beforeGrid,
   defaultSeed,
   testId,
   onLoad,
@@ -631,7 +642,7 @@ export function CodeEditor({
   );
 
   return (
-    <div data-testid={testId} className={cn(accent === 'web' ? 'gradient-web' : 'gradient-mobile', 'min-h-full p-6 space-y-6')}>
+    <div data-testid={testId} className="min-h-full p-6 space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -642,7 +653,9 @@ export function CodeEditor({
         </div>
         <div className="flex items-center gap-2">
           {rightHeader}
-          <Badge variant={ready ? accent : 'outline'}>{ready ? readyLabel : notReadyLabel}</Badge>
+          <Badge variant={ready ? (accent === 'pipeline' ? 'secondary' : accent) : 'outline'}>
+            {ready ? readyLabel : notReadyLabel}
+          </Badge>
           <Button
             disabled={!ready || busy || !draft}
             onClick={() => void handleRun()}
@@ -652,6 +665,8 @@ export function CodeEditor({
           </Button>
         </div>
       </header>
+
+      {beforeGrid}
 
       <div className="grid grid-cols-[240px_1fr] gap-4 min-h-[60vh]">
         <aside className="rounded-lg bg-card shadow overflow-hidden flex flex-col">

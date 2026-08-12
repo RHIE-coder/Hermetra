@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { IDLE_SIDECAR, type SidecarStatus } from '@shared/types/pipeline';
+import { IDLE_SIDECAR, type SidecarStatus } from '@shared/types/studio';
 
 /**
  * The pure half of the fetch sidecar: a state machine plus a restart policy.
@@ -18,8 +18,13 @@ export interface SidecarProcess {
   kill(): void;
 }
 
+/** What a launch needs to know. Carried across restarts, not re-decided per try. */
+export interface SidecarLaunchOptions {
+  headless: boolean;
+}
+
 export interface SupervisorOptions {
-  spawn: () => SidecarProcess;
+  spawn: (opts: SidecarLaunchOptions) => SidecarProcess;
   /** Returns a handle the supervisor can cancel. Defaults to real timers. */
   schedule?: (fn: () => void, ms: number) => unknown;
   cancel?: (handle: unknown) => void;
@@ -67,17 +72,20 @@ export class SidecarSupervisor extends EventEmitter {
   }
 
   /** Idempotent: starting something already running is not an error, it is a no-op. */
-  start(): void {
+  start(opts: Partial<SidecarLaunchOptions> = {}): void {
     if (this.state.phase === 'starting' || this.state.phase === 'ready') return;
     this.clearRetry();
     this.stopping = false;
     // Bookkeeping, not a transition — `launch()` emits the one event this is.
-    this.state = { ...this.state, restarts: 0, lastError: null };
+    const headless = opts.headless ?? this.state.headless;
+    this.state = { ...this.state, headless, restarts: 0, lastError: null };
     this.launch();
   }
 
   private launch(): void {
-    const child = this.opts.spawn();
+    // The mode comes from state, not from the caller, so an automatic restart
+    // reproduces the launch a person asked for rather than the default.
+    const child = this.opts.spawn({ headless: this.state.headless });
     this.child = child;
     this.set({ phase: 'starting', pid: child.pid, endpoint: null, retryInMs: null });
 
@@ -96,7 +104,7 @@ export class SidecarSupervisor extends EventEmitter {
 
       if (this.stopping) {
         this.stopping = false;
-        this.set({ ...IDLE_SIDECAR });
+        this.set({ ...IDLE_SIDECAR, headless: this.state.headless });
         return;
       }
 
@@ -125,7 +133,7 @@ export class SidecarSupervisor extends EventEmitter {
     this.clearRetry();
     if (!this.child) {
       this.stopping = false;
-      if (this.state.phase !== 'stopped') this.set({ ...IDLE_SIDECAR });
+      if (this.state.phase !== 'stopped') this.set({ ...IDLE_SIDECAR, headless: this.state.headless });
       return;
     }
     this.stopping = true;

@@ -22,6 +22,8 @@ import { connectionsService } from '../services/connections';
 import { appleCertsService } from '../services/appleCerts';
 import { BrowserInstaller } from '../services/browserInstall';
 import { createSidecarSupervisor } from '../sidecar';
+import { createStudioSession } from '../services/studioSession.connect';
+import type { SidecarStatus } from '@shared/types/studio';
 import { discardDraft, finishFeedback, readDraftShot, saveDraftStep } from '../services/devFeedback';
 import type { Workspace } from '@shared/types/workspace';
 
@@ -37,6 +39,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   // needs a browser, and a stealth browser idling for a user who never opens
   // that screen is pure cost.
   const sidecar = createSidecarSupervisor(__dirname);
+  // The session holds the browser; the sidecar only starts one. Keeping them
+  // apart is what lets the browser outlive every step a person runs.
+  const session = createStudioSession();
   const userDataDir = app.isReady() ? app.getPath('userData') : process.cwd();
   const myDevices = myDevicesService(userDataDir);
 
@@ -55,9 +60,23 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   });
   workspace.on('change', (s) => broadcast(CHANNELS.EVT_WORKSPACE_UPDATE, s));
   installer.on('log', (log) => broadcast(CHANNELS.EVT_BROWSER_INSTALL, log));
-  sidecar.on('status', (s: unknown) => broadcast(CHANNELS.EVT_SIDECAR_UPDATE, s));
-  // A sidecar that outlives its app is an orphaned browser holding a port.
-  app.on('before-quit', () => sidecar.stop());
+  session.on('status', (s) => broadcast(CHANNELS.EVT_STUDIO_SESSION, s));
+  session.on('log', (l) => broadcast(CHANNELS.EVT_STUDIO_LOG, l));
+  sidecar.on('status', (s: SidecarStatus) => {
+    broadcast(CHANNELS.EVT_SIDECAR_UPDATE, s);
+    // A restart hands out a new endpoint and loses every tab. Following the
+    // supervisor rather than caching the first address is what keeps the screen
+    // from listing tabs that no longer exist.
+    if (s.phase === 'ready' && s.endpoint) void session.attach(s.endpoint);
+    else void session.detach();
+  });
+  // A sidecar that outlives its app is an orphaned browser holding a port. Let
+  // go of the browser first — closing the socket after the process it belongs
+  // to is gone is an unhandled rejection on the way out.
+  app.on('before-quit', () => {
+    void session.detach();
+    sidecar.stop();
+  });
 
   // Periodic device discovery (every 5s) for live-connect view
   let lastDevicesJson = '';
@@ -300,9 +319,48 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   }));
 
   /* ── Workspace ───────────────────────────────────────────────────── */
-  ipcMain.handle(CHANNELS.PIPELINE_SIDECAR_STATUS, () => sidecar.status());
-  ipcMain.handle(CHANNELS.PIPELINE_SIDECAR_START, () => { sidecar.start(); return sidecar.status(); });
-  ipcMain.handle(CHANNELS.PIPELINE_SIDECAR_STOP, () => { sidecar.stop(); return sidecar.status(); });
+  ipcMain.handle(CHANNELS.STUDIO_SIDECAR_STATUS, () => sidecar.status());
+  ipcMain.handle(CHANNELS.STUDIO_SIDECAR_START, (_e, p: { headless?: boolean } = {}) => {
+    sidecar.start(p ?? {});
+    return sidecar.status();
+  });
+  ipcMain.handle(CHANNELS.STUDIO_SIDECAR_STOP, () => { sidecar.stop(); return sidecar.status(); });
+
+  /* ── Data pipeline — the live browser session ────────────────────── */
+  ipcMain.handle(CHANNELS.STUDIO_SESSION_STATUS, () => session.status());
+  ipcMain.handle(CHANNELS.STUDIO_SESSION_NAVIGATE, (_e, { url }: { url: string }) =>
+    session.navigate(url),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SESSION_NEW_TAB, (_e, p: { url?: string }) =>
+    session.newTab(p?.url),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SESSION_CLOSE_PAGE, (_e, { index }: { index: number }) =>
+    session.closePage(index),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SESSION_SET_ACTIVE, (_e, { index }: { index: number }) =>
+    session.setActive(index),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SESSION_RUN, (_e, p: { source: string; url?: string }) =>
+    session.runStep(p.source, { url: p.url }),
+  );
+
+  /* ── Data pipeline — scripts ─────────────────────────────────────── */
+  ipcMain.handle(CHANNELS.STUDIO_SCRIPTS_LIST, () => scriptsService.get().list('studio'));
+  ipcMain.handle(CHANNELS.STUDIO_SCRIPTS_READ, (_e, { path: p }: { path: string }) =>
+    scriptsService.get().read('studio', p),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SCRIPTS_SAVE, (_e, body: ScriptFileBody) =>
+    scriptsService.get().save('studio', body),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SCRIPTS_DELETE, (_e, { path: p }: { path: string }) =>
+    scriptsService.get().remove('studio', p),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SCRIPTS_MKDIR, (_e, { path: p }: { path: string }) =>
+    scriptsService.get().mkdir('studio', p),
+  );
+  ipcMain.handle(CHANNELS.STUDIO_SCRIPTS_MOVE, (_e, { moves }: { moves: ScriptMoveRequest[] }) =>
+    scriptsService.get().move('studio', moves),
+  );
 
   ipcMain.handle(CHANNELS.WORKSPACE_LIST, () => workspace.list());
   ipcMain.handle(CHANNELS.WORKSPACE_SAVE, (_e, ws: Workspace) => workspace.save(ws));

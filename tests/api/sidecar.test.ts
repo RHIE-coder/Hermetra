@@ -1,13 +1,22 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
-import { toSidecarProcess, resolveNodeRuntime } from '@main/sidecar';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  toSidecarProcess,
+  resolveNodeRuntime,
+  resolveCamoufoxDir,
+  sidecarEnv,
+} from '@main/sidecar';
+import { hostSpoofOs } from '@main/sidecar/spoof';
 import { CHANNELS } from '@shared/ipc/channels';
 
 /**
  * The infrastructure half of the sidecar: turning a real child into the handle
  * the supervisor understands, and finding a runtime to run it with.
  *
- * Spec: docs/spec/pipeline/README.md — `pipeline.sidecar`.
+ * Spec: docs/spec/studio/README.md — `studio.sidecar`.
  */
 
 function fakeChild() {
@@ -105,12 +114,110 @@ describe('sidecar runtime resolution', () => {
   });
 });
 
+describe('sidecar launch mode reaches the child as an env var', () => {
+  it('asks for a window when headless is false', () => {
+    // `launcher.mjs` reads this one variable; '0' is the only value that means
+    // headed, so anything else must keep the browser invisible.
+    expect(sidecarEnv({}, { headless: false }).HERMETRA_SIDECAR_HEADLESS).toBe('0');
+  });
+
+  it('asks for no window when headless is true', () => {
+    expect(sidecarEnv({}, { headless: true }).HERMETRA_SIDECAR_HEADLESS).toBe('1');
+  });
+
+  it('keeps the rest of the environment — PATH is how the child finds anything', () => {
+    const got = sidecarEnv({ PATH: '/usr/bin', HERMETRA_NODE: '/n' }, { headless: true });
+    expect(got.PATH).toBe('/usr/bin');
+    expect(got.HERMETRA_NODE).toBe('/n');
+  });
+
+  it('carries the OS to claim, so CJK text has fonts that can draw it', () => {
+    // Same reason the headless flag travels as a string: the child is real Node,
+    // not Electron, and is spawned rather than forked. See `spoof.ts`.
+    expect(sidecarEnv({}, { headless: true }).HERMETRA_SIDECAR_OS).toBe(hostSpoofOs());
+  });
+
+  it('leaves the variable unset where there is nothing to claim', () => {
+    // An empty string is not the same as absent: the child would pass it to
+    // Camoufox, which rejects it. Absent means "pick one yourself".
+    const env = sidecarEnv({}, { headless: true });
+    if (hostSpoofOs() === null) expect('HERMETRA_SIDECAR_OS' in env).toBe(false);
+    else expect(env.HERMETRA_SIDECAR_OS).toBeTruthy();
+  });
+
+  it('does not let an inherited value decide what the browser claims', () => {
+    // A stale export in the developer's shell must not outrank the host.
+    const env = sidecarEnv({ HERMETRA_SIDECAR_OS: 'windows' }, { headless: true });
+    expect(env.HERMETRA_SIDECAR_OS).toBe(hostSpoofOs() ?? undefined);
+  });
+});
+
+describe('finding the Camoufox that ships with the app', () => {
+  let staged: string;
+
+  beforeEach(() => {
+    staged = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-camoufox-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(staged, { recursive: true, force: true });
+  });
+
+  /** What `camoufox-js fetch` leaves behind: the app plus its version stamp. */
+  const stage = (root: string) => {
+    const dir = path.join(root, 'camoufox');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'version.json'), '{"version":"1"}', 'utf-8');
+    return dir;
+  };
+
+  it('uses the copy shipped beside the app', () => {
+    const dir = stage(staged);
+    expect(resolveCamoufoxDir({}, staged)).toBe(dir);
+  });
+
+  it('trusts an explicit override first, the way the Node runtime does', () => {
+    const dir = stage(staged);
+    stage(staged);
+    expect(resolveCamoufoxDir({ CAMOUFOX_INSTALL_DIR: dir }, '/nowhere')).toBe(dir);
+  });
+
+  it('ignores an override that points at nothing', () => {
+    expect(resolveCamoufoxDir({ CAMOUFOX_INSTALL_DIR: '/nope/camoufox' }, '/nowhere')).toBeNull();
+  });
+
+  it('does not trust a half-staged directory', () => {
+    // A packaging step that died midway leaves the folder without its version
+    // stamp. Pointing the browser at that is worse than pointing at nothing:
+    // camoufox-js would treat it as installed and fail on launch instead of
+    // falling back to a copy that works.
+    fs.mkdirSync(path.join(staged, 'camoufox'), { recursive: true });
+    expect(resolveCamoufoxDir({}, staged)).toBeNull();
+  });
+
+  it('returns null when nothing shipped — the per-user cache is the fallback', () => {
+    expect(resolveCamoufoxDir({}, staged)).toBeNull();
+    expect(resolveCamoufoxDir({}, undefined)).toBeNull();
+  });
+
+  it('hands the bundled path to the child, since only the child loads camoufox', () => {
+    const dir = stage(staged);
+    const env = sidecarEnv({}, { headless: true }, staged);
+    expect(env.CAMOUFOX_INSTALL_DIR).toBe(dir);
+  });
+
+  it('leaves the variable unset when nothing shipped, rather than setting a bad path', () => {
+    const env = sidecarEnv({}, { headless: true }, staged);
+    expect('CAMOUFOX_INSTALL_DIR' in env).toBe(false);
+  });
+});
+
 describe('sidecar IPC contract', () => {
   it('registers its channels under one namespace', () => {
-    expect(CHANNELS.PIPELINE_SIDECAR_STATUS).toBe('pipeline:sidecar:status');
-    expect(CHANNELS.PIPELINE_SIDECAR_START).toBe('pipeline:sidecar:start');
-    expect(CHANNELS.PIPELINE_SIDECAR_STOP).toBe('pipeline:sidecar:stop');
-    expect(CHANNELS.EVT_SIDECAR_UPDATE).toBe('evt:pipeline:sidecar');
+    expect(CHANNELS.STUDIO_SIDECAR_STATUS).toBe('studio:sidecar:status');
+    expect(CHANNELS.STUDIO_SIDECAR_START).toBe('studio:sidecar:start');
+    expect(CHANNELS.STUDIO_SIDECAR_STOP).toBe('studio:sidecar:stop');
+    expect(CHANNELS.EVT_SIDECAR_UPDATE).toBe('evt:studio:sidecar');
   });
 
   it('keeps every channel string unique', () => {

@@ -2,7 +2,10 @@ import { test, expect, type Page } from '@playwright/test';
 import { launchHermetra, closeHermetra, type LaunchedApp } from './fixtures/electron';
 
 const NAV_ITEMS: { testid: string; page: string; group: string }[] = [
-  // data-pipeline-nav: six stage screens, in pipeline order. All shells for now.
+  // The browser bench: where a stage gets made, which is not a stage. Outside
+  // the pipeline drawer since 2026-08-12 (docs/spec/studio/).
+  { testid: 'nav-studio-browser',      page: 'page-studio-browser',      group: 'Studio' },
+  // data-pipeline-nav: six stage screens, in pipeline order. All shells now.
   { testid: 'nav-pipeline-jobs',       page: 'page-pipeline-jobs',       group: 'Data Pipeline' },
   { testid: 'nav-pipeline-sources',    page: 'page-pipeline-sources',    group: 'Data Pipeline' },
   { testid: 'nav-pipeline-ingestion',  page: 'page-pipeline-ingestion',  group: 'Data Pipeline' },
@@ -24,12 +27,15 @@ const NAV_ITEMS: { testid: string; page: string; group: string }[] = [
 // Not written as `testid: '...'` on purpose — the surface adapter scrapes that
 // shape out of this file to build its screen list, and a toggle is a control,
 // not a screen.
+const STUDIO_TOGGLE = 'nav-studio-toggle';
 const PIPELINE_TOGGLE = 'nav-pipeline-toggle';
 const LEGACY_TOGGLE = 'nav-legacy-toggle';
 
 /** Which drawer a row lives in. Each one folds on its own. */
-const drawerToggle = (testid: string): string =>
-  testid.startsWith('nav-pipeline-') ? PIPELINE_TOGGLE : LEGACY_TOGGLE;
+const drawerToggle = (testid: string): string => {
+  if (testid.startsWith('nav-studio-')) return STUDIO_TOGGLE;
+  return testid.startsWith('nav-pipeline-') ? PIPELINE_TOGGLE : LEGACY_TOGGLE;
+};
 
 /** Nav rows in a folded drawer are not in the DOM — open the right one first. */
 async function revealNav(win: Page, testid: string): Promise<void> {
@@ -56,8 +62,9 @@ test.describe.serial('smoke', () => {
 
   // Must run before anything opens a drawer — the fixture gives each launch a
   // fresh user-data dir, so this is the only test that sees a first launch.
-  test('first launch opens Data Pipeline and leaves Legacy folded', async () => {
+  test('first launch opens Studio and Data Pipeline and leaves Legacy folded', async () => {
     const win = app.window;
+    await expect(win.getByTestId('nav-studio-browser')).toBeVisible();
     await expect(win.getByTestId('nav-pipeline-jobs')).toBeVisible();
     await expect(win.getByTestId('nav-web-remote')).toHaveCount(0);
   });
