@@ -31,6 +31,9 @@
     "lint:ledger": "node .claude/checks/lint-ledger.mjs"
   },
   "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22.18"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
@@ -75,7 +78,9 @@
     "playwright": "^1.60.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.5.5",
     "webdriverio": "^9.27.1",
     "zustand": "^5.0.2"

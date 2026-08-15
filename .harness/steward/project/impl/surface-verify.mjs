@@ -127,6 +127,22 @@ const EXTRACTOR = () => {
   const INTERACTIVE = 'button, a[href], a[data-testid], input, textarea, select, [role="button"], [role="tab"], [role="menuitem"], [tabindex]:not([tabindex="-1"])';
 
   /**
+   * 글자를 자기가 그리는 편집기는 키 입력을 받으려고 **캐럿 자리에 1px 짜리 숨은 입력
+   * 대리자**를 세워 둔다 — Monaco 는 `textarea.inputarea` 로, EditContext 를 쓰는 최신
+   * 경로에서는 `div.native-edit-context[role=textbox]` 로 둔다. 사람이 겨누는 것은 편집기
+   * 표면이지 그 대리자가 아니다: 표적 크기·겹침 판정에 넣으면 "429x1 짜리 못 누를 입력칸"
+   * 과 "입력칸 둘이 겹친다" 가 편집기 있는 화면마다 영구로 뜬다.
+   *
+   * 편집기 안에서 자기가 입력칸이라고 말하는 것은 전부 이 대리자다 — 보이는 글자는
+   * 그려진 것이지 필드가 아니기 때문이다. 그래서 클래스 이름이 아니라 그 사실로 뺀다.
+   *
+   * 빼는 이유가 하나 더 있다. 이 노드가 잡히느냐 마느냐는 **페이지가 스크롤되느냐**에
+   * 달려 있다 — 접힌 선 아래로 밀리면 사라진다. 그러면 같은 화면의 같은 결함 판정이
+   * 레이아웃을 조금 고칠 때마다 켜졌다 꺼졌다 한다.
+   */
+  const KEYSTROKE_PROXY = '.monaco-editor textarea, .monaco-editor [role="textbox"]';
+
+  /**
    * 보이는 영역으로 잘라낸 사각형. 조상 중 넘침을 감추거나 자체 스크롤하는 것이 있으면
    * 그 안쪽으로 교집합을 취한다. 안 그러면 편집기 같은 내부 스크롤러의 내용이 "화면 밖으로
    * 삐져나온 것" 으로 잡히고(Monaco 는 폭 16777214 짜리 측정 노드를 둔다), 사람이 실제로
@@ -174,6 +190,7 @@ const EXTRACTOR = () => {
   const seen = new Set();
   const push = (el, forceInteractive) => {
     if (seen.has(el)) return;
+    if (el.matches(KEYSTROKE_PROXY)) return;
     const rect = visibleRect(el);
     if (!rect || rect.w <= 0 || rect.h <= 0) return;
     // 화면과 겹치는 부분이 아예 없는 요소는 보이지 않는다 — 스크린리더용 숨김 노드나

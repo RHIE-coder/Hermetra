@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SidecarSupervisor, type SidecarProcess } from '@main/sidecar/supervisor';
+import { encodeLine } from '@main/sidecar/protocol';
+
+/** The child announces its browser as a frame like any other. */
+const READY = (endpoint: string) => encodeLine({ t: 'ready', endpoint }).trim();
 
 /**
  * The supervisor is the pure half of the sidecar: it owns the state machine and
@@ -17,11 +21,14 @@ function fakeProcess() {
     emitLine: (l: string) => void;
     emitExit: (code?: number | null, signal?: string | null) => void;
     killed: boolean;
+    written: string[];
   } = {
     pid: 4242,
     killed: false,
+    written: [],
     onStdoutLine: (cb) => { onLine = cb; },
     onExit: (cb) => { onExit = cb; },
+    write: (line) => { proc.written.push(line); },
     kill: () => { proc.killed = true; },
     emitLine: (l) => onLine?.(l),
     emitExit: (code = 1, signal = null) => onExit?.(code, signal),
@@ -62,7 +69,7 @@ describe('SidecarSupervisor — reaching ready', () => {
     expect(sup.status().phase).toBe('starting');
     expect(sup.status().pid).toBe(4242);
 
-    spawned[0]!.emitLine('WS ws://127.0.0.1:5111/abc');
+    spawned[0]!.emitLine(READY('ws://127.0.0.1:5111/abc'));
     expect(sup.status().phase).toBe('ready');
     expect(sup.status().endpoint).toBe('ws://127.0.0.1:5111/abc');
   });
@@ -88,7 +95,7 @@ describe('SidecarSupervisor — reaching ready', () => {
     const seen: string[] = [];
     sup.on('status', (s) => seen.push(s.phase));
     sup.start();
-    spawned[0]!.emitLine('WS ws://x/1');
+    spawned[0]!.emitLine(READY('ws://x/1'));
     expect(seen).toEqual(['starting', 'ready']);
   });
 });
@@ -97,7 +104,7 @@ describe('SidecarSupervisor — watching and restarting', () => {
   it('marks crashed when the child dies on its own, and says why', () => {
     const { sup, spawned } = makeSupervisor();
     sup.start();
-    spawned[0]!.emitLine('WS ws://x/1');
+    spawned[0]!.emitLine(READY('ws://x/1'));
     spawned[0]!.emitExit(139, 'SIGSEGV');
 
     const s = sup.status();
@@ -126,7 +133,7 @@ describe('SidecarSupervisor — watching and restarting', () => {
     runTimer(0);
     expect(sup.status().restarts).toBe(1);
 
-    spawned[1]!.emitLine('WS ws://x/2');
+    spawned[1]!.emitLine(READY('ws://x/2'));
     expect(sup.status().phase).toBe('ready');
     expect(sup.status().restarts).toBe(0);
   });
@@ -151,7 +158,7 @@ describe('SidecarSupervisor — stopping is deliberate', () => {
   it('stop() kills the child and lands on stopped, not crashed', () => {
     const { sup, spawned } = makeSupervisor();
     sup.start();
-    spawned[0]!.emitLine('WS ws://x/1');
+    spawned[0]!.emitLine(READY('ws://x/1'));
     sup.stop();
 
     expect(spawned[0]!.killed).toBe(true);
@@ -182,6 +189,41 @@ describe('SidecarSupervisor — stopping is deliberate', () => {
     sup.start();
     expect(sup.status().phase).toBe('starting');
     expect(sup.status().restarts).toBe(0);
+  });
+});
+
+describe('SidecarSupervisor — the wire to the child', () => {
+  it('sends a request as one encoded line', () => {
+    const { sup, spawned } = makeSupervisor();
+    sup.start();
+    expect(sup.send({ id: 1, op: 'pages' })).toBe(true);
+    expect(spawned[0]!.written).toEqual(['{"id":1,"op":"pages"}\n']);
+  });
+
+  it('refuses to send when there is no child, rather than throwing', () => {
+    // A screen can ask for tabs at any moment, including while the sidecar is
+    // down. That is an answer ("no"), not an exception to handle everywhere.
+    const { sup } = makeSupervisor();
+    expect(sup.send({ id: 1, op: 'pages' })).toBe(false);
+  });
+
+  it('forwards replies and log frames, and keeps ready to itself', () => {
+    const { sup, spawned } = makeSupervisor();
+    const frames: unknown[] = [];
+    sup.on('frame', (f) => frames.push(f));
+    sup.start();
+
+    spawned[0]!.emitLine(READY('ws://x/1'));
+    spawned[0]!.emitLine('{"t":"reply","id":1,"ok":true,"value":[]}');
+    spawned[0]!.emitLine('{"t":"log","runId":"r1","at":3,"level":"log","text":"hi"}');
+    spawned[0]!.emitLine('[sidecar] chatter');
+
+    // `ready` is the supervisor's own business — it is the phase change. The
+    // rest belongs to whoever asked.
+    expect(frames).toEqual([
+      { t: 'reply', id: 1, ok: true, value: [] },
+      { t: 'log', runId: 'r1', at: 3, level: 'log', text: 'hi' },
+    ]);
   });
 });
 

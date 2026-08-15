@@ -24,18 +24,50 @@
 
 | Section | 무엇 |
 |---|---|
-| 브라우저 바 (`studio-browser-bar`) | 사이드카·세션 상태, 켜기/끄기, 창 보임 여부, 주소창, 탭 목록 |
+| 브라우저 바 (`studio-browser-bar`) | 사이드카·세션 상태, 켜기/끄기, 창 보임 여부, 주소창, 탭 목록. **접힌다** |
 | 스크립트 (`CodeEditor`, `accent="pipeline"`) | `pipeline` 슬롯의 파일 트리 + 편집기 + 실행 |
 | 로그 | 실행 중인 스텝의 출력이 **줄 단위로 흐른다** |
 
-## `studio.session` — 사이드카가 띄운 브라우저를 잡는다
+### 브라우저 바는 접힌다
 
-사이드카는 주소(`WS ws://…`)를 뱉고 거기서 멈춘다 (`README.md` `pipeline.sidecar`). 그 주소에
-붙어서 브라우저를 쥐고 있는 것이 세션이다.
+이 패널은 편집기와 화면 꼭대기 사이에서 **가장 키가 크고**(약 230px), 하는 일은 탭을 한 번
+차려 놓는 것이다. 그 뒤 한 시간 동안 사람이 보는 것은 코드다. 2026-08-14 에 유저가 "코드를
+읽고 편집하기가 너무 힘들다"고 했고, 이 화면에서 되찾을 수 있는 자리는 여기가 제일 컸다.
+
+접혀도 **상태 줄은 남는다** — 브라우저가 켜져 있는지, 붙어 있는지, 끄는 버튼이 어디인지는
+안 쓰는 동안에도 눈에 둬야 하는 것들이다. 오류 줄도 같이 남는다.
+
+- `AC-studio.browser-36` 브라우저 바는 접힌다. 접히면 주소창과 탭 목록이 사라지고
+  **상태 배지·켜기/끄기 줄은 남는다.**
+- `AC-studio.browser-37` 접힌 상태에서도 사이드카·세션 오류는 그대로 보인다. 안 보이는
+  패널 안에 고장 이유를 숨기지 않는다.
+- `AC-studio.browser-38` 탭 줄은 **고른 것이든 아니든 테두리를 두른다.** 테두리가 없으면
+  목록이 그냥 글자로 읽혀 누를 수 있다는 말을 아무것도 안 한다(2026-08-14 피드백).
+  주소창의 **우물**(`bg-muted` + 안쪽 그림자)은 여전히 주소창만의 것이다 — 그것이
+  "여기 타이핑한다"를 말하는 신호이고, 테두리는 아니다.
+
+## `studio.session` — 사이드카가 쥔 브라우저를 부린다
+
+브라우저를 **쥐고 있는 것은 사이드카다.** 메인은 탭 목록·이동·새 탭·닫기·활성화를 사이드카에
+요청하고 그 답을 화면 상태로 옮긴다. 세션은 그 요청 창구이자 상태 기계다.
+
+이 소유권은 취향이 아니라 실측이 정했다. 2026-08-13 까지는 메인이 Playwright 로 직접 붙어
+탭을 쥐고 있었는데, 스크립트를 사이드카에서 돌리려면 **스크립트가 받는 `page` 가 사람이 보고
+있는 그 탭**이어야 한다. 같은 브라우저 서버에 두 번째 클라이언트로 붙어서는 그게 안 된다:
 
 ```
-SidecarSupervisor ──status: ready + endpoint──> PipelineSession.attach()
-                  ──status: 그 외 ───────────> PipelineSession.detach()
+A: contexts = 1 pages = 1     ← 탭을 만든 클라이언트
+B: contexts = 0               ← 같은 wsEndpoint 에 붙은 두 번째 클라이언트
+```
+
+`connect()` 는 클라이언트마다 컨텍스트가 격리된다. 그러니 브라우저를 쥔 쪽과 스크립트를 돌리는
+쪽은 **같은 프로세스여야** 하고, `better-sqlite3` 가 Electron 에서 죽는 이상 그 프로세스는
+사이드카일 수밖에 없다(`README.md` `studio.sidecar`). 부수 효과로 Electron 메인에서 Playwright
+가 빠진다.
+
+```
+SidecarSupervisor ──status: ready + endpoint──> StudioSession.attach()
+                  ──status: 그 외 ───────────> StudioSession.detach()
 ```
 
 배선은 `ipc/register.ts` 가 한다. 화면이 순서를 잡지 않는다 — 화면은 사이드카에게 켜라고만
@@ -44,11 +76,10 @@ SidecarSupervisor ──status: ready + endpoint──> PipelineSession.attach()
 **세션은 실행보다 오래 산다.** 실행이 자기 브라우저를 열고 닫으면 스텝 사이에 로그인·쿠키·보고
 있던 페이지가 전부 날아간다. 그것을 없애려고 있는 화면이다.
 
-`services/pipelineSession.ts` 는 순수하다(브라우저를 주입받는다). 실제 접속은
-`pipelineSession.connect.ts` 하나로 격리된다 — `playwright` 의 **firefox** 클라이언트다
-(Camoufox 는 패치된 Firefox 이고, Chromium 클라이언트는 말이 통하지 않는다). Playwright
-클라이언트는 순수 JS 라 Electron 에서 돈다; 못 도는 `better-sqlite3` 는 사이드카 자식에 갇혀
-있고 여기서 임포트하지 않는다.
+`services/studioSession.ts` 는 순수하다 — 사이드카와 말하는 방법(`StudioRpc`)을 주입받는다.
+그래서 붙고·다시 붙고·놓고·던지는 모든 갈래가 프로세스 하나 없이 검증된다. 실제 배선은
+`studioSession.connect.ts` 하나로 격리되고, 거기서 갈리는 것은 둘뿐이다: 진짜 사이드카냐,
+`HERMETRA_DRIVERS=mock` 의 인프로세스 가짜냐. Playwright 는 이제 사이드카 쪽에만 있다.
 
 ### 인수조건
 
@@ -77,13 +108,14 @@ SidecarSupervisor ──status: ready + endpoint──> PipelineSession.attach()
 - `AC-studio.browser-12` 로그는 마지막 500줄만 쥔다. 도는 스크립트가 렌더러 메모리를 먹게 두지
   않는다.
 
-구현: `tests/unit/pipeline-session.test.ts`, `tests/api/pipeline-session.test.ts`,
-`src/renderer/modules/pipeline/pages/JobsPage.test.tsx`.
+구현: `tests/unit/studio-session.test.ts`, `tests/unit/studio-rpc.test.ts`,
+`tests/unit/studio-browser-host.test.ts`, `tests/api/studio-session.test.ts`,
+`src/renderer/modules/studio/pages/BrowserPage.test.tsx`.
 
 ## 스크립트 — 슬롯 하나, 역할은 export 이름으로
 
-`web` · `mobile` 옆에 `pipeline` 슬롯이 선다
-(`<워크스페이스>/scripts/pipeline/`). 단계별로 폴더를 쪼개지 **않는다** — 쪼개면 로그인 함수를
+`web` · `mobile` 옆에 `studio` 슬롯이 선다
+(`<워크스페이스>/scripts/studio/`). 단계별로 폴더를 쪼개지 **않는다** — 쪼개면 로그인 함수를
 양쪽에 복사하게 된다.
 
 파일은 한 곳이고, 어느 단계의 것인지는 **무엇을 export 하는가**가 말한다.
@@ -94,31 +126,168 @@ SidecarSupervisor ──status: ready + endpoint──> PipelineSession.attach()
 | `transform(raw)` | 처리 |
 | (아무것도 안 함 — `lib/` 아래 부품) | 어느 목록에도 안 뜬다 |
 
+> **이 계약은 아직 아무도 안 쓴다 — 시작 파일에서 광고하지 않는다.** 저 이름 둘을 아는 코드는
+> `host/runner.ts` 여섯 줄이 전부이고, 부른다던 화면(수집·처리)은 13줄짜리 빈 껍데기이며
+> 그 스펙은 "데이터 모양은 이 화면이 내용을 가질 때 채운다"고 적혀 있다. 소비자가 정해지기
+> 전에 만든 계약이라 나중 모양과 맞을 보장이 없고, 이름을 문자로 맞추므로 `extrct` 는 아무
+> 말 없이 아무 일도 안 한다.
+>
+> 2026-08-14 에 유저가 시드의 그 세 줄을 보고 "이건 뭔데? 어떤 라이브러리 문법인데? 왜
+> 필요해?"라고 물었고, 답할 말이 없었다. **시드에서 뺐다.** 러너의 여섯 줄은 남는다 — 예전
+> 시드를 고쳐 쓰고 있는 파일이 있으면 그것을 지우는 순간 말없이 아무 일도 안 하게 된다.
+> 설명은 `GUIDE.md` 가 지금 상태 그대로 싣는다.
+
 재사용은 평범한 ES 모듈 import 다. 새 개념을 만들지 않는다.
 
-> 시드 문자열 안에 `import … from '…'` 문장을 **쓰지 않는다.** electron-vite 의 CommonJS shim 이
-> 그것을 진짜 import 로 읽고 `__dirname` 선언을 그 뒤 — 즉 템플릿 문자열 안 — 에 넣는다. 그러면
-> 메인 프로세스가 창도 못 띄우고 죽는다. 2026-08-11 에 한 번 밟았다.
+**슬롯 뿌리는 모듈 뿌리다.** `<워크스페이스>/scripts/package.json` 에 `{"type":"module"}` 이
+있고, 그 자리가 곧 사용자가 `npm i cheerio` 를 하는 자리다. Node 는 스크립트 파일에서 위로
+걸어 올라가며 `node_modules` 를 찾으므로, 그 한 줄이 상대 import 와 패키지 import 를 동시에
+성립시킨다. 앱이 대신 설치해 주지는 않는다 — 남의 의존성을 몰래 받아 오는 앱은 신뢰의 문제다.
 
-- `AC-studio.browser-13` `pipeline` 슬롯의 파일은 `web`·`mobile` 목록에 뜨지 않는다.
-- `AC-studio.browser-14` 시드는 **함수**를 export 한다. 최상위 문장만 있는 파일은 단계가 가리킬
-  것이 없다.
+`hermetra-env.d.ts` 도 함께 깔린다. 아래의 주입 전역(`page`·`ctx`·`log`·`bus`·`env`)을 선언해
+편집기와 `tsc` 가 스니펫을 오류로 칠하지 않게 하는 것이 전부다.
 
-구현: `tests/api/scripts.test.ts`.
+**시드는 스크립트다.** 위에서 아래로 도는 파일이고, 거기 쓰인 것은 전부 언어 아니면 Playwright
+다 — export 계약도, `log()` 도, 감싸는 것도 없다. 2026-08-13 하루 동안 시드가
+`export extract/transform` 로 열렸는데, 런타임이 이미 진짜 모듈이었는데도 **화면은 여전히
+"빈칸을 채우는 프레임워크"로 읽혔다.** 작업대는 뭔가를 시도해 보는 자리이고, 시도는 스크립트로
+한다. 단계 계약은 주석 세 줄로 남는다.
 
-### 실행은 두 모양을 다 받는다
+**그리고 시드는 import 한다 — 보여 주지 않으면 안 가르친 것이다.** 2026-08-13~14 의 시드는
+"다른 스크립트 import 도 됩니다"를 주석으로만 적었고, 그러면서 예전 시드가 남긴 `lib/` 폴더가
+설명 없이 옆에 서 있었다. 2026-08-14 에 유저가 그 폴더를 가리키며 "이건 어떻게 import해서
+쓰는 거야?"라고 물었다 — 주석은 물리는 두 가지를 **짐작에 맡긴다**: 어느 폴더인지, 그리고
+확장자가 선택이 아니라는 것. 둘 다 글로는 멀쩡해 보이고 **실행이 실패해야** 드러난다.
+그래서 시드는 `lib/rows.ts` 를 실제로 불러오고, **그 파일이 시드와 함께 깔린다.**
 
-작업대에서 도는 것은 두 종류이고 모양이 다르다.
+> 새 파일을 만들 때 놓이는 문구(`BrowserPage.tsx` 의 `DEFAULT_SCRIPT`)는 이 예시를 **되풀이하지
+> 않고 가리킨다.** 그 문구는 파일이 만들어진 자리에 그대로 놓이므로, 하위 폴더에 들어간
+> `'./lib/rows.ts'` 는 아무 데도 가리키지 못한다.
 
-| 모양 | 예 | 어떻게 도는가 |
-|---|---|---|
-| 스니펫 | `await page.goto(…)` | 본문 그대로 |
-| 단계 스크립트 | `export async function extract(page, ctx)` | `export` 를 떼고 본문을 돌린 뒤, 선언된 것을 **부른다** |
+> 시드 문자열 안에 `import … from '…'` 을 쓰는 것은 2026-08-13 까지 **금지**였다. electron-vite
+> 의 CommonJS shim 이 그것을 진짜 import 로 읽고 `__dirname` 선언을 그 뒤 — 템플릿 문자열 한복판
+> — 에 넣어 메인 프로세스를 죽였기 때문이다. 지금 안전한 이유는 하나다: main 에서 맨
+> `__dirname` 을 전부 `import.meta.dirname` 으로 바꿔 **shim 자체가 주입되지 않는다.** 맨
+> `__dirname` 을 다시 들이면 이 함정도 같이 돌아온다.
+>
+> 2026-08-14 부터 시드가 실제로 그 문자열을 담으므로, 이것은 대비해 둔 가정이 아니라 **지금
+> 걸려 있는 조건**이다. 맨 `__dirname` 이 main 에 하나라도 돌아오면 앱이 뜨지 않는다.
 
-모듈을 문장 본문으로 감싸면 한 줄도 돌기 전에 `Unexpected token 'export'` 가 난다. 그래서
-**모든 워크스페이스가 열자마자 보는 시드가, 유일하게 못 돌리는 스크립트였다**(2026-08-11).
+- `AC-studio.browser-13` `studio` 슬롯의 파일은 `web`·`mobile` 목록에 뜨지 않는다.
+- `AC-studio.browser-14` 시드는 **스크립트**다 — 최상위 문장, TypeScript, `console.log`.
+  export 로 열지 않는다.
+- `AC-studio.browser-29` 시드는 자기 파일 하나를 **실제로 import 한다** — 상대 경로로,
+  확장자를 달고(`./lib/rows.ts`). 시드가 불러오는 이름은 그 파일이 정말 export 해야 한다.
+- `AC-studio.browser-30` 그 `lib/rows.ts` 가 시드와 **함께** 깔리고, **함께 갱신된다.**
+  스크립트만 놓으면 예시가 자기 import 줄에서 던진다. 그래서 짝 중 하나라도 사람이 고친 것이면
+  **둘 다 그대로 둔다** — 낡았어도 도는 예시가, 새것인데 못 도는 예시보다 낫다. 앱이 쓴
+  `lib/rows.ts` 의 원문은 `PAST_STUDIO_LIBS` 가 든다(시드와 같은 규칙: 바이트가 같으면 우리
+  것, 한 줄이라도 다르면 사람 것).
+- `AC-studio.browser-35` 예시는 **가져온 함수가 무엇을 했는지 보이게** 한다 — 손 안 댄 것과
+  거친 것을 나란히 찍는다. 결과만 찍으면 견줄 것이 없어 아무것도 안 가르친다. 2026-08-14 에
+  유저가 정확히 그걸 물었다: "import 한 거 뭐가 있어? lib 가져와서 활용하는 거. 아무것도
+  안 보이는데?" — 그때 예시는 문자열 하나를 `trim` 하고 있었고, 그건 누구나 그 자리에 인라인
+  으로 쓸 일이라 **`lib/` 가 왜 있는지를 하나도 보여 주지 못했다.** 지금 헬퍼는 줄바꿈을
+  접고 빈 줄과 중복을 버린다 — 매 스크립트마다 되풀이하기 싫은 만큼의 로직이라야 그 폴더의
+  존재 이유가 된다.
+- `AC-studio.browser-19` 슬롯을 처음 열 때 `package.json` 과 `hermetra-env.d.ts` 가 깔린다.
+  이미 있으면 **덮지 않는다** — 사용자가 의존성을 적어 둔 파일이다.
+- `AC-studio.browser-26` 시드는 **빈 슬롯에만** 깔린다. 그래서 한 번이라도 열어 본
+  워크스페이스는 그날 실린 시작 파일을 계속 쥐고 있고, 예전 시드는 이제 없는 런타임을
+  가르친다. **손대지 않은 시드는 새 것으로 바뀐다** — 판정은 앱이 실제로 쓴 바이트와의
+  일치이고(줄바꿈·끝 공백만 눈감는다), 한 줄이라도 다르면 사람의 파일이므로 건드리지
+  않는다. 지운 시드는 되살리지 않는다. `lib/rows.ts` 는 짝이라 같은 규칙을 같이 받는다
+  (`AC-studio.browser-30`). 지금까지 쓴 시드의 원문은 `PAST_STUDIO_SEEDS` 와
+  `PAST_STUDIO_LIBS` 에 남는다 — 템플릿이 아니라 **기록**이라 새 시드에 맞춰 고치지 않는다.
+- `AC-studio.browser-20` 목록은 점으로 시작하는 파일을 **숨긴다.** 실행이 남기는 임시 모듈이
+  자기 파일 목록에 섞이면 안 된다.
 
-- `extract` 를 export 하면 본문 뒤에 `extract(page, ctx)` 로 불린다. `ctx.url` 은 주소창 값이다.
+**가이드가 스크립트 옆에 산다 (`GUIDE.md`).** 2026-08-14 에 유저가 물었다: "스크립트 문법은
+어떤 걸 참고하면 되는거야? 무엇을 참고해야할지 모르겠어." 앱 안 어디에도 답이 없었다.
+
+답의 3분의 2는 Playwright 공식 문서이고 링크 말고 될 것이 없다. 나머지 3분의 1 — 전역 여섯
+개가 이미 스코프에 있다는 것, Playwright 밑의 엔진이 **Firefox** 라는 것, 상대 import 가
+확장자를 지고 간다는 것 — 은 **이 앱 고유이고 찾아볼 데가 없다.** 그 3분의 1이 이 파일의 몫이다.
+
+UI 패널이 아니라 **워크스페이스의 파일**인 이유: 스크립트와 같은 편집기에서 열리고, 네트워크
+없이 열리고, 그 폴더의 다른 것과 똑같이 고치거나 지울 수 있다. 그래서 파일 목록이 **여는
+곳**이 되고, `실행` 이 **도는 것**과의 경계를 긋는다.
+
+- `AC-studio.browser-31` 목록이 `.md` 도 싣는다. 여는 것과 도는 것은 다른 집합이다.
+- `AC-studio.browser-32` `GUIDE.md` 가 **빈 슬롯이 아니어도** 깔린다. 가이드가 필요한 사람은
+  이미 자기 파일로 찬 폴더를 보고 있는 사람이고, 시드 규칙(`빈 슬롯에만`)으로는 그 사람에게
+  영영 안 닿는다. 고쳐 놓으면 그대로 두고, 지우면 다음 목록에서 다시 놓는다 — 사람의 작업물이
+  아니라 앱이 싣는 문서라, 영영 잃는 쪽이 더 나쁘다.
+- `AC-studio.browser-33` 시드 판정에서 `GUIDE.md` 는 **세지 않는다.** 세면 모든 슬롯이 이미
+  찬 것으로 보여 시작 스크립트가 영영 안 깔린다.
+- `AC-studio.browser-34` `실행` 은 `.ts`·`.js`·`.tsx`·`.jsx` 와 이름 없는 버퍼에만 열린다.
+  마크다운을 러너에 넘기면 사람이 쓰지도 않은 문법 오류가 패널에 찍힌다.
+
+**그리고 문서로 읽힌다.** 편집기가 `.md` 에 원문/미리보기 토글을 준다 —
+`AC-web.code.editor-07~10` 이 그 계약이고, 편집기 껍데기가 공용이라 웹·모바일도 같이 받는다.
+가이드를 파일로 둔 대가가 `|---|---|` 여서는 안 된다.
+
+구현: `tests/api/scripts.test.ts` · `src/renderer/modules/shared/CodeEditor.test.tsx`.
+
+### 실행 — 파일은 진짜 모듈로 돈다
+
+작업대의 스크립트는 **문자열로 평가되지 않는다.** 사이드카의 진짜 Node 가 그것을 파일로
+`import` 한다. 그래서 TypeScript 타입 주석, `import`, npm 패키지, 파일을 가리키는 스택
+트레이스가 전부 따라온다 — 새 기능이 아니라 런타임을 제자리에 놓은 결과다.
+
+2026-08-13 까지는 `new Function(source)` 였다. 웹·모바일의 실행기를 그대로 물려받은 것인데,
+본문 평가기는 `import` 도 타입 주석도 문법 오류로 거절한다. 그러면서 시드와 이 문서는 "재사용은
+평범한 ES 모듈 import" 라고 적고 있었다. **못 지키는 약속이 스펙에 적혀 있었다** — 실측:
+
+| 쓰려던 것 | `new Function` |
+|---|---|
+| `await page.goto(…)` | 돈다 |
+| `function extract(page: Page): Promise<Row[]>` | `SyntaxError: Unexpected token ':'` |
+| `import { login } from './lib/login.ts'` | `SyntaxError: Cannot use import statement outside a module` |
+| `await import('./lib/login.ts')` | 기준 경로가 스크립트가 아니라 앱의 CWD 라 못 쓴다 |
+
+지금은 이렇게 돈다.
+
+1. 편집기의 **지금 내용**을 스크립트가 있는 **그 디렉터리**에 임시 모듈로 쓴다. 한 칸 깊거나
+   얕은 자리에 쓰면 `./lib/…` 이 다른 곳을 가리키므로, 자리는 협상 대상이 아니다. 이름은 점으로
+   시작하고 실행 뒤 지워진다. 저장하지 않은 버퍼로도 돌려 볼 수 있어야 하기 때문이다.
+2. `import()` 한다. 확장자 `.ts` 는 Node 가 타입만 벗겨 낸다 — 트랜스파일러도 번들러도 끼지
+   않는다.
+3. export 를 보고 부른다.
+
+| 파일이 가진 것 | 무엇이 불리는가 |
+|---|---|
+| 최상위 문장뿐 | import 되는 순간 이미 다 돈 것이다 — **이것이 기본 모양이다** |
+| `extract` | `extract(page, ctx)` → `transform` 이 있으면 그 결과에 이어 붙는다 |
+| `default` | `default(page, ctx)` |
+
+### 스크립트가 이미 아는 것들만 쓴다
+
+작업대에서 쓰는 문법은 이 앱이 발명한 것이 아니어야 한다. Playwright 문서에 있는 그대로가
+여기서도 돌아야 한다는 뜻이다:
+
+```ts
+const page = await context.newPage();
+await page.goto('http://example.com');
+await page.locator('#search').fill('query');
+console.log(page.url());
+```
+
+그래서 `page` 옆에 **`context` 와 `browser` 가 함께** 꽂힌다. `context.newPage()` 는 배우지
+않고도 손이 가는 것이고, 없으면 문서를 그대로 옮긴 코드가 `ReferenceError` 로 죽는다.
+
+**`console.log` 는 패널로 간다.** 사이드카에서 stdout 은 프로토콜 그 자체라, 스크립트가 거기
+찍은 줄은 메시지가 아니라 깨진 프레임이고 잡음으로 버려진다 — 즉 아무 데도 안 나온다. 특별한
+`log()` 를 가르치는 대신 **평범한 쪽이 동작하게** 만든다(`log()` 도 그대로 남는다).
+`console.warn`·`console.error` 는 에러 줄로 나온다. 실행이 끝나면 `console` 은 원래대로
+돌아간다.
+
+**전역 주입은 스니펫을 위한 것이다.** 모듈 안에서 `page` 는 자유 변수라 그냥 두면
+`ReferenceError` 이고, 그러면 레거시 `웹 > 스크립트` 에서 쓰던 한 줄을 여기 붙여 넣는 순간
+깨진다. 파일로 정리한 뒤에는 export 한 함수의 **인자**로 받는 쪽이 정본이다 — 전역은 붙여 넣기
+경로를 살려 두는 장치이지 권장 문법이 아니다.
+
+- `ctx.url` 은 주소창 값이다.
 - `transform` 은 `extract` 뒤에서만 붙는다. 혼자 있으면 입력이 없고, `undefined` 로 부르면
   멀쩡한 스크립트를 저자가 쓰지도 않은 크래시로 만든다.
 - 돌려준 값은 패널에 찍힌다 — 확인하려던 게 그거니까. 배열이면 개수도 같이 적고, 2000자에서
@@ -126,14 +295,37 @@ SidecarSupervisor ──status: ready + endpoint──> PipelineSession.attach()
 
 - `AC-studio.browser-15` `export` 를 쓰는 스크립트가 돈다. `extract` 는 `(page, ctx)` 로 불리고
   `transform` 은 그 결과에 이어 붙는다.
-- `AC-studio.browser-16` export 가 없는 평범한 스니펫은 그대로 본문으로 돈다.
+- `AC-studio.browser-16` export 가 없는 평범한 스크립트는 그대로 돈다. `page`·`context`·
+  `browser`·`ctx`·`log`·`env` 가 전역으로 닿는다.
+- `AC-studio.browser-27` **`console.log` 가 패널에 뜬다.** `warn`·`error` 는 에러 줄로 뜨고,
+  실행이 끝나면 `console` 은 원래대로 돌아간다.
+- `AC-studio.browser-28` **Playwright 문서의 코드가 그대로 돈다** —
+  `const page = await context.newPage()` 부터 `console.log(page.url())` 까지.
 - `AC-studio.browser-17` **앱이 싣는 시드가 실제로 돈다.** 실행기와 시드가 다른 파일에 있어서,
-  둘을 가로지르는 테스트만 이 어긋남을 잡는다 (`tests/api/pipeline-session.test.ts`).
+  둘을 가로지르는 테스트만 이 어긋남을 잡는다 (`tests/api/studio-session.test.ts`).
 - `AC-studio.browser-18` mock 브라우저는 그 시드를 돌릴 만큼은 된다. 앱이 싣는 스크립트를 못
   돌리는 mock 은 이 화면을 검증하지 못하는 mock 이다.
+- `AC-studio.browser-21` **TypeScript 가 돈다.** 타입 주석·인터페이스가 있는 파일이 그대로
+  실행된다.
+- `AC-studio.browser-22` **상대 import 가 스크립트 자기 위치를 기준으로 돈다.** `./lib/login.ts`
+  는 앱의 CWD 가 아니라 그 파일 옆을 가리킨다.
+- `AC-studio.browser-23` **워크스페이스에 설치한 패키지가 import 된다.** 해석은
+  `<워크스페이스>/scripts/node_modules` 에서 위로 올라가는 Node 의 규칙 그대로다.
+- `AC-studio.browser-24` 임시 모듈은 실행이 실패해도 **지워진다.** 남은 파일이 다음 실행의
+  import 대상이 되거나 사용자 목록에 보이면 안 된다.
+- `AC-studio.browser-25` 문법 오류·던진 예외는 **그 실행의 실패**로 보고된다. 사이드카는 살아
+  있고 탭도 그대로다 — 스크립트 하나가 브라우저를 데려가지 않는다.
 
 ## 알려진 한계
 
+- **한 번에 하나만 돈다.** 두 스크립트가 한 프로세스에서 동시에 돌면 주입 전역을 두고 다투고
+  로그가 한 이야기로 섞인다. 도는 중에 온 실행 요청은 거절된다.
+- `HERMETRA_DRIVERS=mock` 에서 실행은 **Electron 런타임**에서 일어나므로 `.ts` 를 벗기지
+  못한다. 그 모드는 화면을 열어 보기 위한 것이고(e2e·스크린샷), 실행기 자체는 진짜 Node 를
+  쓰는 단위·API 테스트가 덮는다.
+- 편집기는 워크스페이스의 **다른 파일을 읽지 못한다.** Monaco 에 파일 시스템이 없어서 모듈
+  해석 진단(2307)을 끈 채로 둔다 — `./lib/rows.ts` 에서 온 타입은 편집기 안에서 `any` 다.
+  런타임에는 영향이 없다. 열어 둔 슬롯의 파일을 extraLib 로 넣어 주면 풀린다.
 - 단계가 스크립트를 **참조**하는 자리(수집·처리 화면)는 아직 없다. 지금은 작업대에서 스텝을
   직접 돌린다. 창고 화면이 생기면 그 연결이 붙는다.
 - 실행 플로우(소스+수집+처리+저장소를 엮어 예약 실행)는 아직 없다. 이 화면의 이름이 "작업"인

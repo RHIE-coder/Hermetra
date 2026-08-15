@@ -336,6 +336,33 @@ export function FeedbackOverlay() {
     };
   }, [open]);
 
+  // Freezing has to cover **dismissal** too, not just movement.
+  //
+  // Covering the app stops a press from reaching an app button, but not from
+  // reaching the app: a popup closes itself on a press that lands outside it,
+  // and it watches for that on `document` or `window` — where a press on this
+  // overlay arrives all the same, by bubbling. So pointing at an open workspace
+  // switcher closed it before it could be marked, and the picture taken a moment
+  // later no longer had the thing the feedback was about on it.
+  //
+  // The stop sits on `document.body`. React delegates from its root container,
+  // which is below body, so the overlay's own buttons still fire; everything the
+  // app listens on is above it. Wheel and keyboard are left out on purpose —
+  // this overlay's own scroll exception and shortcuts live on `window`, and
+  // stopping them here would cut its own wires.
+  useEffect(() => {
+    if (!open) return;
+    const seal = (e: Event) => {
+      const at = e.target;
+      if (at instanceof Element && at.closest(`[${FEEDBACK_ATTR}]`)) e.stopPropagation();
+    };
+    const types = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'touchstart'];
+    for (const type of types) document.body.addEventListener(type, seal);
+    return () => {
+      for (const type of types) document.body.removeEventListener(type, seal);
+    };
+  }, [open]);
+
   // Reads the collected screens' pictures, once each, while the panel is up.
   // Read on opening rather than on freezing: most rounds never open the panel,
   // and a picture that is never looked at costs nothing this way.

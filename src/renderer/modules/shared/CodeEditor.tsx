@@ -2,13 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
   AlertTriangle,
+  BookOpen,
   ChevronDown,
   ChevronRight,
+  Code2,
   FileCode,
   FilePlus,
   Folder,
   FolderOpen,
   FolderPlus,
+  Maximize2,
+  Minimize2,
   Play,
   Plus,
   Save,
@@ -25,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { useT } from '@/lib/i18n';
 import type { MessageKey } from '@/lib/messages';
 import { EDITOR_THEME_NAME, applyEditorTheme, type MonacoThemeHost } from '@/lib/editor-theme';
+import { MarkdownView } from './MarkdownView';
 
 function detectLanguage(path: string | undefined): string {
   if (!path) return 'typescript';
@@ -50,6 +55,15 @@ function detectLanguage(path: string | undefined): string {
       return 'typescript';
   }
 }
+
+/**
+ * What Run will accept. The tree lists more than it runs — the workbench seeds a
+ * `GUIDE.md` next to the scripts — and handing prose to the runner prints a
+ * syntax error in a file the person did not write. An unnamed buffer counts:
+ * it becomes `untitled.ts` on the way out.
+ */
+const RUNNABLE_EXT = /\.(ts|js|tsx|jsx)$/i;
+const isRunnable = (p: string | undefined) => !p?.trim() || RUNNABLE_EXT.test(p);
 
 const sanitizeName = (raw: string) => raw.trim().replace(/[\\/]/g, '-').replace(/\.\./g, '.');
 
@@ -109,6 +123,64 @@ function buildTree(items: ScriptFile[]): TreeNode[] {
 
 type PendingCreate = { kind: 'file' | 'folder'; parent: string };
 
+/** The slice of the Monaco namespace this file configures. */
+interface MonacoTsHost {
+  languages: {
+    typescript: {
+      ScriptTarget: { ESNext: number };
+      ModuleKind: { ESNext: number };
+      ModuleResolutionKind: { NodeJs: number };
+      typescriptDefaults: {
+        setCompilerOptions(options: Record<string, unknown>): void;
+        setDiagnosticsOptions(options: Record<string, unknown>): void;
+        addExtraLib(content: string, path?: string): void;
+      };
+    };
+  };
+}
+
+/**
+ * Make the editor agree with the runtime.
+ *
+ * A studio script is imported by Node with its types stripped, so `./lib/x.ts`
+ * — extension and all — is the specifier that works. Monaco out of the box
+ * rejects exactly that, and cannot see the file it points at either, so the
+ * shipped seed opens covered in red squiggles under its own first line.
+ *
+ * Unresolved-module diagnostics are silenced rather than solved: the editor has
+ * no filesystem to resolve against. Everything else — real type errors in the
+ * code on screen — is left switched on, because that is the part worth having.
+ */
+function teachTypeScript(monaco: unknown, ambient?: string): void {
+  const ts = (monaco as MonacoTsHost).languages?.typescript;
+  if (!ts) return;
+
+  ts.typescriptDefaults.setCompilerOptions({
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    allowImportingTsExtensions: true,
+    allowNonTsExtensions: true,
+    // Force, so every file counts as a module even with no import or export in
+    // it. Otherwise TypeScript reads a plain script as a script and marks its
+    // top-level `await` as an error — the first line of the seed, and of most
+    // things anyone writes here. Node treats these files as modules
+    // (`scripts/package.json` says `type: module`), so this matches the runtime.
+    moduleDetection: 3,
+    noEmit: true,
+    strict: false,
+  });
+  ts.typescriptDefaults.setDiagnosticsOptions({
+    diagnosticCodesToIgnore: [
+      2307, // cannot find module — there is no filesystem here
+      2792, // ...and its "did you mean to set moduleResolution" follow-up
+    ],
+  });
+  // The runner's injected globals. Without them every `log()` and `page` in a
+  // snippet reads as an error the moment it is typed.
+  if (ambient) ts.typescriptDefaults.addExtraLib(ambient, 'file:///hermetra-env.d.ts');
+}
+
 interface Props {
   /**
    * Which area owns this editor. `pipeline` has no area colour on purpose —
@@ -132,13 +204,24 @@ interface Props {
    */
   beforeGrid?: React.ReactNode;
   defaultSeed: string;
+  /**
+   * Ambient declarations for the globals this slot's runner injects. Handed to
+   * Monaco so the editor and the runtime say the same thing about `page`,
+   * `log()` and friends.
+   */
+  ambient?: string;
   testId?: string;
   onLoad: (path: string) => Promise<void>;
   onSave: (body: ScriptFileBody) => Promise<void>;
   onDelete: (path: string) => Promise<void>;
   onMkdir: (path: string) => Promise<void>;
   onSelectNew: (body: ScriptFileBody) => void;
-  onRun: (source: string) => Promise<void>;
+  /**
+   * `path` is the file the buffer belongs to. The studio runs a script as a
+   * real module, so where it sits decides what its imports resolve to; web and
+   * mobile ignore it.
+   */
+  onRun: (source: string, path?: string) => Promise<void>;
   /**
    * Atomic batch move of files / folders. Resolves with `{ ok: true }` on
    * success or `{ ok: false, error, conflicts }` when any destination already
@@ -161,6 +244,7 @@ export function CodeEditor({
   rightHeader,
   beforeGrid,
   defaultSeed,
+  ambient,
   testId,
   onLoad,
   onSave,
@@ -187,6 +271,16 @@ export function CodeEditor({
   );
   const expandTimerRef = useRef<{ path: string; id: ReturnType<typeof setTimeout> } | null>(null);
   const language = detectLanguage(draft?.path);
+  const isMarkdown = language === 'markdown';
+  // Two ways to give the file more room, kept apart because they answer
+  // different questions. `preview` asks what a `.md` says; `focus` asks for the
+  // panel width and height back off the tree and the browser bar.
+  //
+  // Both are remembered across files rather than reset on open: someone who
+  // turned the guide into a document wants the next guide as a document too,
+  // and someone reading wide wants to stay wide.
+  const [preview, setPreview] = useState(false);
+  const [focus, setFocus] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -232,6 +326,17 @@ export function CodeEditor({
       return next;
     });
   }, [current, scripts, onLoad]);
+
+  // Esc leaves the wide view. A mode that hides the file tree needs a way out
+  // that does not require finding the button that hid it.
+  useEffect(() => {
+    if (!focus) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFocus(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [focus]);
 
   useEffect(() => {
     if (menuParent === null) return;
@@ -480,7 +585,7 @@ export function CodeEditor({
   const handleRun = async () => {
     if (!draft) return;
     if (dirty) await onSave(draft);
-    await onRun(draft.source);
+    await onRun(draft.source, draft.path);
   };
 
   const renderNode = (node: TreeNode, depth: number) => {
@@ -642,8 +747,16 @@ export function CodeEditor({
   );
 
   return (
-    <div data-testid={testId} className="min-h-full p-6 space-y-6">
-      <header className="flex items-start justify-between gap-4">
+    // The screen is the height it is, and everything on it that is not the file
+    // takes its share off the top. So the page stops growing past the viewport
+    // and the editor takes whatever the rows above it did not — otherwise
+    // folding a panel away only makes the page shorter and buys the file
+    // nothing.
+    <div
+      data-testid={testId}
+      className="flex h-full min-h-0 flex-col gap-6 overflow-auto p-6"
+    >
+      <header className="flex shrink-0 items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Terminal className="h-5 w-5 text-muted-foreground" />
@@ -657,7 +770,7 @@ export function CodeEditor({
             {ready ? readyLabel : notReadyLabel}
           </Badge>
           <Button
-            disabled={!ready || busy || !draft}
+            disabled={!ready || busy || !draft || !isRunnable(draft.path)}
             onClick={() => void handleRun()}
           >
             {busy ? <Square className="h-4 w-4 animate-pulse" /> : <Play className="h-4 w-4" />}
@@ -666,71 +779,78 @@ export function CodeEditor({
         </div>
       </header>
 
-      {beforeGrid}
+      {beforeGrid && !focus && <div className="shrink-0">{beforeGrid}</div>}
 
-      <div className="grid grid-cols-[240px_1fr] gap-4 min-h-[60vh]">
-        <aside className="rounded-lg bg-card shadow overflow-hidden flex flex-col">
-          <div className="relative flex items-center justify-between px-3 py-2 border-b border-border">
-            <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              {t('web.code.files')}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              data-menu-trigger=""
-              onClick={() => toggleMenu('')}
-              title={t('web.code.newItem')}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            {menuParent === '' && (
-              <div className="absolute right-2 top-9 z-20">{renderMenu('', 0)}</div>
-            )}
-          </div>
-          {moveError && (
-            <div
-              data-testid="script-move-error"
-              className="flex items-start gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-            >
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <div className="flex-1 break-words">
-                <div>
-                  {moveError.conflicts.length > 0
-                    ? t('web.code.move.conflict')
-                    : moveError.message}
-                </div>
-                {moveError.conflicts.length > 0 && (
-                  <div className="mt-1 font-mono break-all">
-                    {moveError.conflicts.join(' · ')}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => setMoveError(null)}
-                className="opacity-70 hover:opacity-100"
-                title={t('common.cancel')}
+      <div
+        className={cn(
+          'grid min-h-[420px] flex-1 gap-4',
+          focus ? 'grid-cols-1' : 'grid-cols-[240px_1fr]',
+        )}
+      >
+        {!focus && (
+          <aside className="rounded-lg bg-card shadow overflow-hidden flex flex-col">
+            <div className="relative flex items-center justify-between px-3 py-2 border-b border-border">
+              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                {t('web.code.files')}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-menu-trigger=""
+                onClick={() => toggleMenu('')}
+                title={t('web.code.newItem')}
               >
-                ×
-              </button>
+                <Plus className="h-4 w-4" />
+              </Button>
+              {menuParent === '' && (
+                <div className="absolute right-2 top-9 z-20">{renderMenu('', 0)}</div>
+              )}
             </div>
-          )}
-          <ul
-            data-drop-target=""
-            onDragOver={(e) => handleDragOverFolder('', e)}
-            onDrop={(e) => void handleDrop('', e)}
-            className="flex-1 overflow-y-auto p-1"
-          >
-            {pending?.parent === '' && renderPendingRow(0)}
-            {tree.length === 0 && pending?.parent !== '' ? (
-              <li className="px-3 py-2 text-xs text-muted-foreground">{t('web.code.empty')}</li>
-            ) : (
-              tree.map((n) => renderNode(n, 0))
+            {moveError && (
+              <div
+                data-testid="script-move-error"
+                className="flex items-start gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <div className="flex-1 break-words">
+                  <div>
+                    {moveError.conflicts.length > 0
+                      ? t('web.code.move.conflict')
+                      : moveError.message}
+                  </div>
+                  {moveError.conflicts.length > 0 && (
+                    <div className="mt-1 font-mono break-all">
+                      {moveError.conflicts.join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setMoveError(null)}
+                  className="opacity-70 hover:opacity-100"
+                  title={t('common.cancel')}
+                >
+                  ×
+                </button>
+              </div>
             )}
-          </ul>
-        </aside>
+            <ul
+              data-drop-target=""
+              onDragOver={(e) => handleDragOverFolder('', e)}
+              onDrop={(e) => void handleDrop('', e)}
+              className="flex-1 overflow-y-auto p-1"
+            >
+              {pending?.parent === '' && renderPendingRow(0)}
+              {tree.length === 0 && pending?.parent !== '' ? (
+                <li className="px-3 py-2 text-xs text-muted-foreground">{t('web.code.empty')}</li>
+              ) : (
+                tree.map((n) => renderNode(n, 0))
+              )}
+            </ul>
+          </aside>
+        )}
 
         <div className="flex flex-col gap-3 min-h-0">
-          <div className="flex items-center justify-between rounded-md border border-border bg-card/50 px-3 py-2">
+          <div className="flex shrink-0 items-center justify-between gap-2 rounded-md border border-border bg-card/50 px-3 py-2">
             <div className="flex items-center gap-2 min-w-0">
               <FileCode className="h-3.5 w-3.5 text-muted-foreground" />
               <input
@@ -743,50 +863,81 @@ export function CodeEditor({
                 <Badge variant="outline" className="text-[10px] py-0">{t('web.code.unsaved')}</Badge>
               )}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!draft || !dirty}
-              onClick={() => void handleSave()}
-            >
-              <Save className="h-3.5 w-3.5" /> {t('common.save')}
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Only where there is something to render. A source/preview pair
+                  on a `.ts` file offers a second view of the same thing. */}
+              {isMarkdown && (
+                <Button
+                  variant={preview ? 'secondary' : 'outline'}
+                  size="sm"
+                  data-testid="editor-preview-toggle"
+                  onClick={() => setPreview((v) => !v)}
+                >
+                  {preview ? <Code2 className="h-3.5 w-3.5" /> : <BookOpen className="h-3.5 w-3.5" />}
+                  {preview ? t('web.code.showSource') : t('web.code.showPreview')}
+                </Button>
+              )}
+              <Button
+                variant={focus ? 'secondary' : 'outline'}
+                size="icon"
+                title={focus ? t('web.code.focusOff') : t('web.code.focusOn')}
+                aria-label={focus ? t('web.code.focusOff') : t('web.code.focusOn')}
+                aria-pressed={focus}
+                data-testid="editor-focus-toggle"
+                onClick={() => setFocus((v) => !v)}
+              >
+                {focus ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!draft || !dirty}
+                onClick={() => void handleSave()}
+              >
+                <Save className="h-3.5 w-3.5" /> {t('common.save')}
+              </Button>
+            </div>
           </div>
 
-          <div className="flex-1 min-h-[360px] overflow-hidden rounded-md border border-border bg-card">
-            <Editor
-              height="100%"
-              language={language}
-              value={draft?.source ?? ''}
-              theme={EDITOR_THEME_NAME}
-              beforeMount={(monaco) => {
-                monacoRef.current = monaco as MonacoThemeHost;
-                applyEditorTheme(monacoRef.current, resolvedTheme === 'dark');
-              }}
-              onChange={(value) =>
-                setDraft(
-                  draft
-                    ? { ...draft, source: value ?? '' }
-                    : { path: 'untitled.ts', source: value ?? '' },
-                )
-              }
-              options={{
-                minimap: { enabled: false },
-                fontFamily: 'Geist Mono, ui-monospace, monospace',
-                fontSize: 13,
-                lineHeight: 20,
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                tabSize: 2,
-                renderLineHighlight: 'line',
-                padding: { top: 12, bottom: 12 },
-                smoothScrolling: true,
-                fixedOverflowWidgets: true,
-              }}
-            />
+          <div className="flex-1 min-h-[240px] overflow-hidden rounded-md border border-border bg-card">
+            {isMarkdown && preview ? (
+              <MarkdownView source={draft?.source ?? ''} testId="editor-preview" />
+            ) : (
+              <Editor
+                height="100%"
+                language={language}
+                value={draft?.source ?? ''}
+                theme={EDITOR_THEME_NAME}
+                beforeMount={(monaco) => {
+                  monacoRef.current = monaco as MonacoThemeHost;
+                  applyEditorTheme(monacoRef.current, resolvedTheme === 'dark');
+                  teachTypeScript(monaco, ambient);
+                }}
+                onChange={(value) =>
+                  setDraft(
+                    draft
+                      ? { ...draft, source: value ?? '' }
+                      : { path: 'untitled.ts', source: value ?? '' },
+                  )
+                }
+                options={{
+                  minimap: { enabled: false },
+                  fontFamily: 'Geist Mono, ui-monospace, monospace',
+                  fontSize: 13,
+                  lineHeight: 20,
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  tabSize: 2,
+                  renderLineHighlight: 'line',
+                  padding: { top: 12, bottom: 12 },
+                  smoothScrolling: true,
+                  fixedOverflowWidgets: true,
+                }}
+              />
+            )}
           </div>
 
-          <div className="rounded-md border border-border bg-card/50">
+          <div className="shrink-0 rounded-md border border-border bg-card/50">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border">
               <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                 {t('web.code.output')}

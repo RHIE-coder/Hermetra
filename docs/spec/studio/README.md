@@ -42,23 +42,37 @@
 
 ```
 Electron 메인 ──spawn──> node launcher.mjs ──> Camoufox (Firefox)
-     │                   (better-sqlite3 · impit 이 여기 갇힌다)
-     └──── playwright-core firefox.connect(ws://…) ───────────┘
+     │                        │  (better-sqlite3 · impit 이 여기 갇힌다)
+     └── JSON 라인 (stdin/stdout) ┘  탭 · 이동 · 스크립트 실행 · 로그
+                              │
+                              └── playwright firefox.connect(ws://…) ── 브라우저를 쥔다
 ```
 
 부수 효과가 둘 더 있고, 둘 다 원래 필요했던 것이다: 수집을 **병렬로 돌리고 스케줄링** 하려면
 어차피 프로세스가 따로 있어야 하고, 브라우저가 죽어도 앱이 안 죽는다.
 
-### 계약
+### 계약 — stdout 은 JSON 라인이다
 
-- stdout 에는 `WS <ws://…>` 한 줄만 나간다. 진행 상황과 로그는 stderr 다. 수다스러운 의존성이
-  주소로 오인되지 않게 하는 유일한 방법이다.
+사이드카는 브라우저를 띄우고 **거기서 멈추지 않는다.** 브라우저를 쥐고 있는 것도, 사용자
+스크립트를 돌리는 것도 이쪽이다(`browser.md` `studio.session` 이 그 이유를 실측으로 적는다).
+그래서 stdout 이 주소 한 줄로는 부족해졌고, 대신 **한 줄에 JSON 하나**가 규칙이다.
+
+| 방향 | 프레임 | 무엇 |
+|---|---|---|
+| → 사이드카 (stdin) | `{"id":n,"op":"pages"\|"navigate"\|"new-tab"\|"close-page"\|"set-active"\|"run"}` | 요청 하나 |
+| ← 메인 (stdout) | `{"t":"ready","endpoint":"ws://…"}` | 브라우저가 섰다. 한 번 |
+| | `{"t":"reply","id":n,"ok":…}` | 그 요청의 답 |
+| | `{"t":"log","runId":…,"level":…,"text":…}` | 도는 스크립트의 한 줄, 나오는 대로 |
+
+stderr 는 그대로 사람이 읽는 진행 상황이다. **형식을 섞지 않는 것이 요점이다** — 수다스러운
+의존성이 프레임으로 오인되지 않게 하는 유일한 방법이고, 파싱 못 하는 줄은 잡음으로 버린다.
+
 - SIGTERM 을 받으면 브라우저를 닫고 0 으로 끝난다.
 
 인수조건:
 
-- `AC-studio.sidecar-01` stdout 은 조각으로 온다. 주소가 두 청크에 걸쳐 와도, 한 청크에 두
-  줄이 와도 감독자는 **완전한 줄만** 본다.
+- `AC-studio.sidecar-01` stdout 은 조각으로 온다. 프레임이 두 청크에 걸쳐 와도, 한 청크에 두
+  줄이 와도 감독자는 **완전한 줄만** 본다. JSON 이 아닌 줄은 버린다.
 - `AC-studio.sidecar-02` 자식이 스스로 죽으면 `crashed` 가 되고 **왜 죽었는지**가 남는다.
   재시작은 백오프(1s·2s·4s…)로 예약된다.
 - `AC-studio.sidecar-03` `ready` 에 도달하면 재시작 횟수가 **0으로 돌아간다.** 회복한
@@ -108,8 +122,13 @@ Camoufox 가 폰트 집합을 갖지 않은 플랫폼(freebsd 등)에서는 **�
 실린다.** `scripts/bundle-node.mjs` 가 공식 배포본을 받아 `resources/node/` 에 놓고,
 electron-builder 의 `extraResources` 가 그것을 `Contents/Resources/node/` 로 싣는다.
 
-버전은 **고정**한다(`v22.14.0`). "가장 새것"으로 두면 같은 커밋이 빌드할 때마다 다른 런타임을
+버전은 **고정**한다(`v24.19.0`). "가장 새것"으로 두면 같은 커밋이 빌드할 때마다 다른 런타임을
 싣고, 그 차이가 어디에도 안 남는다.
+
+고정값은 아무 LTS 가 아니다. **`.ts` 타입 스트리핑이 기본으로 켜진 런타임이어야 한다** —
+사용자 스크립트가 TypeScript 인 채로 `import` 되는 것이 작업대의 계약이기 때문이다
+(`browser.md` `AC-studio.browser-21`). 22.14 에는 그 기능이 없었고, 그래서 이 버전은 취향이
+아니라 요구다. 트랜스파일러를 하나 더 싣는 대신 런타임이 하는 일을 쓴다.
 
 `resolveNodeRuntime()` 의 순서는 `HERMETRA_NODE` → 번들(`resourcesPath/node`) → PATH 다.
 패키징된 앱이 사용자 기계의 아무 node 보다 **자기 것을 먼저 쓰게** 하는 순서이고, 셋 다 없으면

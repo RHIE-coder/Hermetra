@@ -569,3 +569,50 @@ describe('FeedbackOverlay — the window drag region', () => {
     expect(root().classList.contains('no-drag')).toBe(false);
   });
 });
+
+/**
+ * Freezing the screen is not only about movement.
+ *
+ * The overlay covers the app, so a press never reaches an app button — but the
+ * app's popups close themselves on a press that lands *outside* them, and they
+ * watch for that on `document` / `window`, where a press on this overlay arrives
+ * all the same by bubbling. So pointing at an open workspace switcher to mark it
+ * closed it first, and the picture taken a moment later no longer had the thing
+ * the feedback was about on it.
+ */
+describe('FeedbackOverlay — the app underneath stays frozen', () => {
+  const listen = (target: EventTarget, type: string) => {
+    const spy = vi.fn();
+    target.addEventListener(type, spy);
+    return { spy, off: () => target.removeEventListener(type, spy) };
+  };
+
+  it('keeps a press on the canvas away from the app outside-click handlers', () => {
+    const onWindow = listen(window, 'mousedown');
+    const onDocument = listen(document, 'mousedown');
+    try {
+      setup();
+      const canvas = openOverlay();
+      fireEvent.mouseDown(canvas, { clientX: 300, clientY: 300 });
+      expect(onWindow.spy).not.toHaveBeenCalled();
+      expect(onDocument.spy).not.toHaveBeenCalled();
+    } finally {
+      onWindow.off();
+      onDocument.off();
+    }
+  });
+
+  it('gives the app its presses back once the overlay is folded away', () => {
+    const onWindow = listen(window, 'mousedown');
+    try {
+      setup();
+      openOverlay();
+      // Nothing drawn, so the outermost Escape folds rather than freezes.
+      fireEvent.keyDown(window, { key: 'Escape' });
+      fireEvent.mouseDown(document.body, { clientX: 10, clientY: 10 });
+      expect(onWindow.spy).toHaveBeenCalled();
+    } finally {
+      onWindow.off();
+    }
+  });
+});

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, Globe, Play, Plus, Square, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, EyeOff, Globe, Play, Plus, Square, Trash2, X } from 'lucide-react';
 import type { SidecarStatus, StudioSessionStatus } from '@shared/types/studio';
+import { STUDIO_AMBIENT_DTS } from '@shared/studio/ambient';
 import type { BrowserPage } from '@shared/types/web';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,17 +24,18 @@ import { useStudioStore } from '../store';
  * Nothing on this screen is a stage. It is the bench the stages get made on.
  */
 
-const DEFAULT_SCRIPT = `// The live browser is in scope as \`page\`.
-//   page  : the active tab of the pipeline browser
-//   env   : process env
-//   bus   : shared variable bus (get / set)
-//   log() : one line into the panel below, as it happens
+// A blank file, not a second example. It points at example.ts rather than
+// repeating the import demo: this text lands wherever the file was created, and
+// a './lib/rows.ts' written into a subfolder would resolve nowhere.
+const DEFAULT_SCRIPT = `// A script, run top to bottom in a real Node runtime. TypeScript, imports of
+// your other scripts, and packages you install under scripts/ all work —
+// example.ts shows what an import of your own file looks like.
 //
-// Try a step here, then move what works into a script that exports
-// extract() / transform() for a stage to reference.
+// In scope: page (the active tab) · context · browser · ctx.url (the address
+// bar) · env. console.log lands in the panel below, as it happens.
 
 await page.goto('https://example.com');
-log('title:', await page.title());
+console.log('title:', await page.title());
 `;
 
 const SIDECAR_LABEL: Record<SidecarStatus['phase'], MessageKey> = {
@@ -58,6 +60,12 @@ interface BrowserBarProps {
   onUrlChange: (url: string) => void;
   showWindow: boolean;
   onToggleWindow: () => void;
+  /**
+   * Lifted: the wide view unmounts this bar, and a fold that forgot itself
+   * across one press of that button would be a choice the screen threw away.
+   */
+  open: boolean;
+  onToggleOpen: () => void;
   onStart: () => void;
   onStop: () => void;
   onNavigate: (url: string) => void;
@@ -74,6 +82,8 @@ function BrowserBar({
   onUrlChange,
   showWindow,
   onToggleWindow,
+  open,
+  onToggleOpen,
   onStart,
   onStop,
   onNavigate,
@@ -136,6 +146,18 @@ function BrowserBar({
         <span className="ml-auto max-w-[22rem] truncate font-mono text-[11px] text-muted-foreground">
           {sidecar.endpoint ?? t('studio.browser.noEndpoint')}
         </span>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          data-testid="studio-browser-fold"
+          aria-expanded={open}
+          aria-label={open ? t('studio.browser.foldBar') : t('studio.browser.unfoldBar')}
+          title={open ? t('studio.browser.foldBar') : t('studio.browser.unfoldBar')}
+          onClick={onToggleOpen}
+        >
+          {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
       </div>
 
       {/* Two things a person needs told, and only when they are true: the first
@@ -161,37 +183,45 @@ function BrowserBar({
         up for the raised `secondary` surface the rest of the app uses for a
         pressed control, and each carries a dot, which reads as a list entry and
         never as a field.
-      */}
-      <div className="flex gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Globe className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            data-testid="studio-url"
-            placeholder="https://…"
-            className="pl-8"
-            value={url}
-            disabled={!attached}
-            onChange={(e) => onUrlChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submit();
-            }}
-          />
-        </div>
-        <Button variant="outline" size="sm" disabled={!attached} onClick={submit}>
-          {t('studio.browser.go')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!attached}
-          onClick={() => onNewTab(url.trim() || undefined)}
-        >
-          <Plus className="h-4 w-4" />
-          {t('studio.browser.newTab')}
-        </Button>
-      </div>
 
-      {pages.length === 0 ? (
+        That fixed the mix-up and left a second one: an unselected tab kept no
+        edge at all, so the list read as loose text and nothing said the rows
+        could be pressed. They are outlined now (2026-08-14 feedback). The
+        outline alone is not the field's signature — the well is, and the tabs
+        still do not wear it.
+      */}
+      {open && (
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Globe className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              data-testid="studio-url"
+              placeholder="https://…"
+              className="pl-8"
+              value={url}
+              disabled={!attached}
+              onChange={(e) => onUrlChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submit();
+              }}
+            />
+          </div>
+          <Button variant="outline" size="sm" disabled={!attached} onClick={submit}>
+            {t('studio.browser.go')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!attached}
+            onClick={() => onNewTab(url.trim() || undefined)}
+          >
+            <Plus className="h-4 w-4" />
+            {t('studio.browser.newTab')}
+          </Button>
+        </div>
+      )}
+
+      {!open ? null : pages.length === 0 ? (
         <p className="rounded-md border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
           {t('studio.browser.noTabs')}
         </p>
@@ -207,7 +237,7 @@ function BrowserBar({
                   type="button"
                   onClick={() => onSetActive(p.index)}
                   className={cn(
-                    'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+                    'flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border px-2 py-1.5 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
                     p.isActive && 'bg-secondary font-semibold text-secondary-foreground shadow-sm',
                   )}
                 >
@@ -269,6 +299,11 @@ export function BrowserPage() {
   // The address bar is also the step's `ctx.url`, and Run sits in the editor
   // header — so the value lives up here where both can reach it.
   const [url, setUrl] = useState('');
+  // The tabs get set up once and then someone writes code for an hour, and this
+  // panel is the tallest thing between the editor and the top of the screen.
+  // Folded, it keeps the row that says whether the browser is up — the part you
+  // still want an eye on while you are not using it.
+  const [barOpen, setBarOpen] = useState(true);
 
   useEffect(() => {
     void init();
@@ -295,13 +330,14 @@ export function BrowserPage() {
       ready={session.phase === 'attached'}
       busy={busy}
       defaultSeed={DEFAULT_SCRIPT}
+      ambient={STUDIO_AMBIENT_DTS}
       onLoad={loadScript}
       onSave={saveScript}
       onDelete={deleteScript}
       onMkdir={mkdirScript}
       onMove={moveScripts}
       onSelectNew={setCurrentScript}
-      onRun={(source) => runStep(source, url.trim() || undefined)}
+      onRun={(source, path) => runStep(source, path, url.trim() || undefined)}
       beforeGrid={
         <BrowserBar
           sidecar={sidecar}
@@ -310,6 +346,8 @@ export function BrowserPage() {
           onUrlChange={setUrl}
           showWindow={showWindow}
           onToggleWindow={() => setShowWindow((v) => !v)}
+          open={barOpen}
+          onToggleOpen={() => setBarOpen((v) => !v)}
           onStart={() => void startBrowser(!showWindow)}
           onStop={() => void stopBrowser()}
           onNavigate={(url) => void navigate(url)}

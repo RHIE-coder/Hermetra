@@ -12,9 +12,11 @@ interface OrchestratorDeps {
 
 export class ScenarioOrchestrator extends EventEmitter {
   private running = new Map<string, AbortController>();
+  private deps: OrchestratorDeps;
 
-  constructor(private deps: OrchestratorDeps) {
+  constructor(deps: OrchestratorDeps) {
     super();
+    this.deps = deps;
   }
 
   start(scenario: Scenario): string {

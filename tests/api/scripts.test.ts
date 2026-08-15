@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { runModule } from '@main/sidecar/host/runner';
 
 let tmpDir: string;
 
@@ -84,13 +85,21 @@ describe('scripts service — the studio slot', () => {
     expect(items.some((i) => i.type === 'file')).toBe(true);
   });
 
-  it('seeds a function, not a bare snippet — the stage calls what it stores', async () => {
-    // A stage picks a script by the function it exports. A file that runs
-    // top-level statements has nothing for a stage to reference.
+  it('seeds a script, not a contract to fill in', async () => {
+    // The workbench is where a person tries things. Opening it onto an export
+    // contract made it read as a framework; what it should read as is the
+    // script they would have written anyway.
     const { scriptsService } = await importFresh();
     const [first] = scriptsService.list('studio').filter((i) => i.type === 'file');
     const body = scriptsService.read('studio', first!.path);
-    expect(body.source).toMatch(/export async function extract/);
+
+    expect(body.source).toMatch(/^await page\.goto/m);
+    expect(body.source).toMatch(/console\.log/);
+    // TypeScript, because that is the whole point of the runtime underneath.
+    // Any annotated declaration will do — which line carries it is the seed's
+    // business, not this test's.
+    expect(body.source).toMatch(/^const \w+: \w+(\[\])? =/m);
+    expect(body.source).not.toMatch(/^export /m);
   });
 
   it('keeps its files away from the web and mobile slots', async () => {
@@ -111,11 +120,443 @@ describe('scripts service — the studio slot', () => {
     expect(items.map((i) => i.path)).toContain('lib/auth.ts');
   });
 
+  // A comment saying "imports of your other scripts work" was the whole answer,
+  // and it left the two things that actually bite to be guessed: which folder,
+  // and that the extension is not optional. An example that runs says both, and
+  // is the difference between a claim and a demonstration.
+  it('opens on a script that really imports another file, and ships that file too', async () => {
+    const { scriptsService } = await importFresh();
+    const items = scriptsService.list('studio');
+    const seed = scriptsService.read('studio', 'example.ts').source;
+
+    const clause = seed.match(/^import \{([^}]+)\} from '([^']+)';/m);
+    expect(clause, 'the seed has no import to learn from').not.toBeNull();
+    // Relative, and carrying the extension — the specifier Node actually wants.
+    expect(clause![2]).toBe('./lib/rows.ts');
+
+    // The file it points at is seeded beside it, or the example throws on line one.
+    expect(items.map((i) => i.path)).toContain('lib/rows.ts');
+    const helper = scriptsService.read('studio', 'lib/rows.ts').source;
+    for (const name of clause![1].split(',').map((n) => n.replace(/^\s*type\s+/, '').trim())) {
+      expect(helper, `lib/rows.ts does not export ${name}`).toMatch(
+        new RegExp(`export [\\w ]*\\b${name}\\b`),
+      );
+    }
+  });
+
   it('rejects an escaping path here too', async () => {
     const { scriptsService } = await importFresh();
     expect(() => scriptsService.save('studio', { path: '../leak.ts', source: '' })).toThrow(
       /Invalid path/,
     );
+  });
+});
+
+describe('scripts service — the slot root is a module root', () => {
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-scripts-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const root = () => path.join(tmpDir, 'scripts');
+
+  it('lays down a package.json so imports and installed packages resolve', async () => {
+    // Node walks up from the script file: this one line is what makes both
+    // `./lib/x.ts` and `npm i cheerio` work in the folder a person edits in.
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    const pkg = JSON.parse(fs.readFileSync(path.join(root(), 'package.json'), 'utf-8'));
+    expect(pkg.type).toBe('module');
+  });
+
+  it('declares the injected globals so the editor does not paint a snippet red', async () => {
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    const dts = fs.readFileSync(path.join(root(), 'hermetra-env.d.ts'), 'utf-8');
+    expect(dts).toMatch(/declare (const|var|global)/);
+    expect(dts).toMatch(/page/);
+  });
+
+  it('never overwrites a package.json a person has edited', async () => {
+    // It is where their dependencies are written down.
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+    fs.writeFileSync(
+      path.join(root(), 'package.json'),
+      JSON.stringify({ type: 'module', dependencies: { cheerio: '^1.0.0' } }),
+      'utf-8',
+    );
+
+    scriptsService.list('studio');
+    const pkg = JSON.parse(fs.readFileSync(path.join(root(), 'package.json'), 'utf-8'));
+    expect(pkg.dependencies).toEqual({ cheerio: '^1.0.0' });
+  });
+
+  it('hides dotfiles from the listing', async () => {
+    // A run writes a temp module beside the script. It is not the person's file
+    // and must never appear in their tree.
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+    fs.writeFileSync(path.join(root(), 'studio', '.step.run-1.ts'), '', 'utf-8');
+
+    expect(scriptsService.list('studio').some((i) => i.name.startsWith('.'))).toBe(false);
+  });
+
+  it('locates a script so a run knows which directory it belongs to', async () => {
+    const { scriptsService } = await importFresh();
+    const found = scriptsService.locate('studio', 'lib/login.ts');
+
+    expect(found.dir).toBe(path.join(root(), 'studio', 'lib'));
+    expect(found.name).toBe('login.ts');
+  });
+
+  it('locates an unsaved buffer at the slot root', async () => {
+    // Trying something out before naming it is the point of the workbench.
+    const { scriptsService } = await importFresh();
+    const found = scriptsService.locate('studio', undefined);
+
+    expect(found.dir).toBe(path.join(root(), 'studio'));
+    expect(found.name).toMatch(/\.ts$/);
+  });
+
+  it('refuses to locate a path that climbs out of the slot', async () => {
+    const { scriptsService } = await importFresh();
+    expect(() => scriptsService.locate('studio', '../../secrets.ts')).toThrow(/Invalid path/);
+  });
+});
+
+/**
+ * The guide is the app's answer to "what do I even look at?".
+ *
+ * It is seeded next to the scripts and listed in the tree rather than linked out,
+ * because the half a person cannot look up anywhere — the injected globals, the
+ * Firefox engine under Playwright, `export extract` — is exactly the half that is
+ * this app's own. A link to playwright.dev answers the other half.
+ */
+describe('scripts service — the guide sits with the scripts', () => {
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-scripts-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const slot = () => path.join(tmpDir, 'scripts', 'studio');
+  const guide = () => path.join(slot(), 'GUIDE.md');
+
+  it('lists markdown, so the guide can be opened from the tree', async () => {
+    const { scriptsService } = await importFresh();
+    const items = scriptsService.list('studio');
+    expect(items.map((i) => i.path)).toContain('GUIDE.md');
+  });
+
+  it('reaches a workspace that already existed, not only a fresh one', async () => {
+    // The person who needs the guide is the one already staring at a workspace
+    // full of their own files — `seedIfEmpty` never fires there.
+    fs.mkdirSync(slot(), { recursive: true });
+    fs.writeFileSync(path.join(slot(), 'mine.ts'), '// mine', 'utf-8');
+
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(fs.existsSync(guide())).toBe(true);
+  });
+
+  it('answers the questions it exists to answer', async () => {
+    const { scriptsService } = await importFresh();
+    const { source } = scriptsService.read('studio', 'GUIDE.md');
+
+    // Where to look for the 90% this app did not invent — and the engine, because
+    // Playwright's Chromium-only pages are a dead end here.
+    expect(source).toMatch(/playwright\.dev/);
+    expect(source).toMatch(/[Ff]irefox/);
+    // The globals, which are documented nowhere else a person would think to look.
+    for (const g of ['page', 'context', 'browser', 'ctx', 'log', 'env']) {
+      // In backticks, either bare or as a call — `log(...)` counts.
+      expect(source, `the guide never mentions \`${g}\``).toMatch(new RegExp('`' + g + '[(`]'));
+    }
+    // The two names that prompted all of this, and the honest status of both.
+    expect(source).toMatch(/extract/);
+    expect(source).toMatch(/transform/);
+  });
+
+  it('leaves a guide the person has edited alone', async () => {
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+    const mine = '# my notes\n';
+    fs.writeFileSync(guide(), mine, 'utf-8');
+
+    scriptsService.list('studio');
+    expect(fs.readFileSync(guide(), 'utf-8')).toBe(mine);
+  });
+
+  it('does not list a markdown file as something to run', async () => {
+    // Listing it is what makes it openable; it is still not a script. The Run
+    // button is disabled for it in the editor (`CodeEditor.test.tsx`).
+    const { scriptsService } = await importFresh();
+    const [guideEntry] = scriptsService.list('studio').filter((i) => i.path === 'GUIDE.md');
+    expect(guideEntry!.type).toBe('file');
+  });
+});
+
+/**
+ * The example is the answer to "how do I import one of my own files?", so the
+ * one thing it must never be is broken. A seed is a string in this file until
+ * something runs it — and a wrong specifier or a name that is not exported over
+ * in lib/ both look perfectly fine as text.
+ *
+ * `tests/api/studio-session.test.ts` already runs the shipped seed and checks it
+ * does not fail. This asks the next question: the import resolved, but did the
+ * thing it imported do anything? A seed that pulls in `clean` and never applies
+ * it passes there and still teaches nothing here.
+ *
+ * A fake page — what is under test is the example, not a browser.
+ */
+describe('scripts service — the example it seeds actually runs', () => {
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-scripts-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('runs top to bottom, import and all', async () => {
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+    const { dir, name } = scriptsService.locate('studio', 'example.ts');
+    const { source } = scriptsService.read('studio', 'example.ts');
+
+    const lines: { level: string; text: string }[] = [];
+    const visited: string[] = [];
+    // What a page really hands back: wrapped, padded, and repeating itself.
+    const page = {
+      goto: async (to: string) => void visited.push(to),
+      title: async () => 'Example Domain',
+      $$eval: async (_sel: string, fn: (els: unknown[]) => unknown) =>
+        fn([
+          { textContent: '  Example Domain  ' },
+          { textContent: 'This domain is for use\n    in illustrative examples.' },
+          { textContent: '   ' },
+          { textContent: 'Example Domain' },
+        ]),
+    };
+
+    const out = await runModule(
+      { runId: 'seed', dir, name, source, ctx: {} },
+      { page, emit: (level, text) => lines.push({ level, text }), now: () => 0 },
+    );
+
+    expect(out.error).toBe('');
+    expect(out.ok).toBe(true);
+    expect(visited).toEqual(['https://example.com']);
+
+    const transcript = lines.map((l) => l.text).join('\n');
+    expect(transcript).toContain('title: Example Domain');
+
+    // The whole point of the example: you can see, side by side, what the
+    // imported function did. Printing only the result teaches nothing — there
+    // is nothing to compare it against.
+    const [rawLine, cleanedLine] = [
+      lines.find((l) => l.text.startsWith('raw'))?.text,
+      lines.find((l) => l.text.startsWith('cleaned'))?.text,
+    ];
+    expect(rawLine, 'the example never shows the untouched rows').toBeDefined();
+    expect(cleanedLine, 'the example never shows the cleaned rows').toBeDefined();
+
+    // Raw keeps the mess; cleaned does not. That difference is the demonstration.
+    expect(rawLine).toContain('  Example Domain  ');
+    expect(cleanedLine).not.toContain('  Example Domain  ');
+    expect(cleanedLine).toContain('Example Domain');
+    // Wrapped text collapsed, the blank dropped, the repeat dropped.
+    expect(cleanedLine).not.toMatch(/\\n/);
+    expect((cleanedLine!.match(/Example Domain/g) ?? []).length).toBe(1);
+  });
+});
+
+describe('scripts service — a workspace that already has the old seed', () => {
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-scripts-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const slot = () => path.join(tmpDir, 'scripts', 'studio');
+  const seedFile = () => path.join(slot(), 'example.ts');
+  const read = (p: string) => fs.readFileSync(p, 'utf-8');
+
+  /** The seed as it shipped before 2026-08-13: no types, no import that runs. */
+  const OLD_SEED = `// Stage script. Stages reference the functions this exports.
+//   extract(page, ctx)  → ingestion. Returns raw rows, unchanged.
+//   transform(raw)      → processing. Reshapes them for storage.
+//
+// Reuse needs nothing new: put a shared step in its own file under lib/ and
+// pull it in with an ordinary ES module import.
+
+export async function extract(page, ctx) {
+  await page.goto(ctx.url ?? 'https://example.com');
+  return page.$$eval('h1', (els) => els.map((el) => ({ title: el.textContent })));
+}
+
+export function transform(raw) {
+  return raw.map((row) => ({ ...row, title: row.title?.trim() }));
+}
+`;
+
+  /** The same file one name earlier, while the slot was called `pipeline`. */
+  const OLDER_SEED = OLD_SEED.replace('// Stage script.', '// Pipeline script.');
+
+  /**
+   * The seed as it shipped 2026-08-13..14: a script by then, but with nothing to
+   * import — which is the state the person was in when they asked how importing
+   * is supposed to work.
+   */
+  const SEED_WITHOUT_IMPORT = `// Browser workbench. This file is a script: it runs top to bottom, as written,
+// in a real Node runtime. TypeScript, imports of your other scripts, and any
+// package you install under scripts/ (npm i cheerio) all work.
+//
+// Already in scope: page (the active tab) · context · browser · ctx.url (the
+// address bar) · env. console.log lands in the panel below, as it happens.
+
+await page.goto(ctx.url ?? 'https://example.com');
+
+const title: string = await page.title();
+console.log('title:', title);
+
+const headings: string[] = await page.$$eval('h1', (els: Element[]) =>
+  els.map((el) => el.textContent?.trim() ?? ''),
+);
+console.log(headings.length, 'headings', headings);
+
+// A pipeline stage calls a script by the function it exports instead:
+//   export async function extract(page, ctx) { ... }
+//   export function transform(raw) { ... }
+`;
+
+  const plant = (source: string) => {
+    fs.mkdirSync(slot(), { recursive: true });
+    fs.writeFileSync(seedFile(), source, 'utf-8');
+  };
+
+  it.each([
+    ['the shipped seed', () => OLD_SEED],
+    ['the one from when the slot was `pipeline`', () => OLDER_SEED],
+    ['the same file with Windows line endings', () => OLD_SEED.replace(/\n/g, '\r\n')],
+    ['the script that had nothing to import', () => SEED_WITHOUT_IMPORT],
+  ])('replaces %s, because nobody wrote it', async (_which, source) => {
+    // The seed only lands in an empty slot, so a workspace that has been opened
+    // once keeps whatever shipped that day — here, a starter file that teaches
+    // a runtime this app no longer has.
+    plant(source());
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(read(seedFile())).toMatch(/^await page\.goto/m);
+    expect(read(seedFile())).not.toMatch(/^export async function extract/m);
+  });
+
+  it('leaves a seed the person has touched exactly as it is', async () => {
+    // One edited line makes it theirs. Overwriting work is worse than showing
+    // an outdated example.
+    const mine = `${OLD_SEED}\n// my note\n`;
+    plant(mine);
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(read(seedFile())).toBe(mine);
+  });
+
+  it('does not bring back a seed that was deleted', async () => {
+    fs.mkdirSync(slot(), { recursive: true });
+    fs.writeFileSync(path.join(slot(), 'amazon.ts'), '// mine', 'utf-8');
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(fs.existsSync(seedFile())).toBe(false);
+  });
+
+  it('leaves everything else in the slot alone', async () => {
+    plant(OLD_SEED);
+    fs.mkdirSync(path.join(slot(), 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(slot(), 'lib', 'rows.ts'), '// mine', 'utf-8');
+    fs.writeFileSync(path.join(slot(), 'amazon.ts'), '// also mine', 'utf-8');
+
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(read(path.join(slot(), 'lib', 'rows.ts'))).toBe('// mine');
+    expect(read(path.join(slot(), 'amazon.ts'))).toBe('// also mine');
+  });
+
+  it('brings the file the new seed imports along with it', async () => {
+    // Replacing the script alone would leave an import pointing at nothing —
+    // the example would throw on its first line in a workspace that never had
+    // a lib/ folder.
+    plant(SEED_WITHOUT_IMPORT);
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(read(seedFile())).toMatch(/^import /m);
+    expect(fs.existsSync(path.join(slot(), 'lib', 'rows.ts'))).toBe(true);
+  });
+
+  /** `lib/rows.ts` exactly as the app used to write it — nobody's edit in it. */
+  const OLD_LIB = `export interface Row {
+  title: string;
+}
+
+/** Shared helpers live here and are imported by whatever needs them. */
+export function clean(row: Row): Row {
+  return { ...row, title: row.title.trim() };
+}
+`;
+
+  it('upgrades the script and the file it imports together', async () => {
+    // They ship as a set. The new example calls `clean(rows)` where the old
+    // helper took a single row, so replacing one and keeping the other is how
+    // you get an example that throws on the line that is meant to teach.
+    plant(SEED_WITHOUT_IMPORT);
+    fs.mkdirSync(path.join(slot(), 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(slot(), 'lib', 'rows.ts'), OLD_LIB, 'utf-8');
+
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(read(seedFile())).toMatch(/^import /m);
+    expect(read(path.join(slot(), 'lib', 'rows.ts'))).not.toBe(OLD_LIB);
+  });
+
+  it('upgrades neither when the imported file is the person\'s', async () => {
+    // A stale example that runs beats a fresh one that cannot. The guide still
+    // lands, so they are not left with nothing.
+    plant(SEED_WITHOUT_IMPORT);
+    const mine = 'export interface Row { title: string }\nexport const clean = (r: Row) => r;\n';
+    fs.mkdirSync(path.join(slot(), 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(slot(), 'lib', 'rows.ts'), mine, 'utf-8');
+
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(read(path.join(slot(), 'lib', 'rows.ts'))).toBe(mine);
+    expect(read(seedFile())).toBe(SEED_WITHOUT_IMPORT);
+    expect(fs.existsSync(path.join(slot(), 'GUIDE.md'))).toBe(true);
+  });
+
+  it('does not rewrite the current seed on every listing', async () => {
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+    const first = read(seedFile());
+
+    scriptsService.list('studio');
+    expect(read(seedFile())).toBe(first);
   });
 });
 
@@ -161,9 +602,14 @@ describe('scripts service — the slot was called `pipeline` until 2026-08-12', 
     // The seed only fires into an empty slot. If the move ran late the folder
     // would look empty, get a starter script, and the person's own files would
     // arrive next to a file they never wrote.
+    //
+    // GUIDE.md is not that file: it is laid down in every slot, carried-over or
+    // not, and is what this test would otherwise mistake for a stray seed.
     legacy('amazon.ts', '// mine');
     const { scriptsService } = await importFresh();
-    const files = scriptsService.list('studio').filter((i) => i.type === 'file');
+    const files = scriptsService
+      .list('studio')
+      .filter((i) => i.type === 'file' && i.path !== 'GUIDE.md');
     expect(files.map((i) => i.path)).toEqual(['amazon.ts']);
   });
 

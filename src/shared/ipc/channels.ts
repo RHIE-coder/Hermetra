@@ -321,8 +321,15 @@ export interface IpcContract {
   [CHANNELS.STUDIO_SESSION_CLOSE_PAGE]: { input: { index: number }; output: BrowserPage[] };
   [CHANNELS.STUDIO_SESSION_SET_ACTIVE]: { input: { index: number }; output: BrowserPage[] };
   [CHANNELS.STUDIO_SESSION_RUN]: {
-    /** `url` is what is in the address bar; a stage script reads it as `ctx.url`. */
-    input: { source: string; url?: string };
+    /**
+     * `url` is what is in the address bar; a stage script reads it as `ctx.url`.
+     *
+     * `path` is the file the buffer belongs to, slot-relative. The run needs it
+     * because the script is imported as a real module: its directory is what
+     * `./lib/…` and the workspace's own `node_modules` resolve against. An
+     * unsaved buffer has none, and runs from the slot root.
+     */
+    input: { source: string; path?: string; url?: string };
     output: WebScriptRunResult;
   };
 

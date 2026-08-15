@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ScriptFile } from '@shared/types/web';
+import type { ScriptFile, ScriptFileBody } from '@shared/types/web';
 import { I18nProvider } from '@/lib/i18n';
 import { CodeEditor } from './CodeEditor';
 
@@ -22,7 +22,7 @@ const baseProps = () => ({
   titleKey: 'web.code.title' as const,
   subtitleKey: 'web.code.subtitle' as const,
   scripts: [] as ScriptFile[],
-  current: null,
+  current: null as ScriptFileBody | null,
   output: '',
   readyLabel: 'ready',
   notReadyLabel: 'idle',
@@ -447,5 +447,161 @@ describe('CodeEditor — drag & drop (scripts-tree-dnd)', () => {
       hasDim(source!.parentElement) ||
       Array.from(source!.querySelectorAll('*')).some((c) => hasDim(c));
     expect(inSubtree).toBe(true);
+  });
+});
+
+/**
+ * The tree lists more than it runs. The workbench seeds a `GUIDE.md` beside the
+ * scripts, so the file list is now the place to *open* things — and pressing Run
+ * on prose would hand markdown to the runner and print a syntax error the person
+ * did not write.
+ */
+describe('CodeEditor — Run is for scripts, not for everything the tree lists', () => {
+  const runButton = () => screen.getByRole('button', { name: /run|실행/i });
+
+  it('runs a script file', () => {
+    renderEditor({ ready: true, current: { path: 'example.ts', source: 'await page.goto("/")' } });
+    expect(runButton()).toBeEnabled();
+  });
+
+  it('does not offer to run a markdown file', () => {
+    renderEditor({ ready: true, current: { path: 'GUIDE.md', source: '# guide' } });
+    expect(runButton()).toBeDisabled();
+  });
+
+  it('still runs a buffer nobody has named yet', () => {
+    // An unnamed buffer becomes `untitled.ts` at run time, so it is a script.
+    renderEditor({ ready: true, current: { path: '', source: 'await page.goto("/")' } });
+    expect(runButton()).toBeEnabled();
+  });
+});
+
+/**
+ * The tree lists a file written to be read, and opening it in the code editor
+ * hands the reader `|---|---|`. So the one file type that is prose can be shown
+ * as prose.
+ */
+describe('CodeEditor — a markdown file can be read as a document', () => {
+  const previewToggle = () => screen.queryByTestId('editor-preview-toggle');
+
+  const GUIDE = [
+    '# Browser workbench',
+    '',
+    'Nothing in it is this app\'s **invention**.',
+    '',
+    '| For | Read |',
+    '|---|---|',
+    '| `page` | the Playwright docs |',
+    '',
+  ].join('\n');
+
+  it('offers the toggle for markdown and not for a script', () => {
+    const { unmount } = renderEditor({
+      current: { path: 'example.ts', source: 'await page.goto("/")' },
+    });
+    expect(previewToggle()).toBeNull();
+    unmount();
+
+    renderEditor({ current: { path: 'GUIDE.md', source: GUIDE } });
+    expect(previewToggle()).not.toBeNull();
+  });
+
+  it('renders headings and GFM tables instead of the source', async () => {
+    const user = userEvent.setup();
+    renderEditor({ current: { path: 'GUIDE.md', source: GUIDE } });
+
+    await user.click(previewToggle()!);
+
+    const pane = screen.getByTestId('editor-preview');
+    expect(within(pane).getByRole('heading', { level: 1 })).toHaveTextContent('Browser workbench');
+    // Without remark-gfm the pipe table stays a paragraph of `|---|---|`, which
+    // is the exact thing this view exists to stop showing.
+    expect(within(pane).getByRole('table')).toBeInTheDocument();
+    expect(within(pane).getByRole('columnheader', { name: 'For' })).toBeInTheDocument();
+  });
+
+  it('renders a fenced block as a block, not as a chip', async () => {
+    const user = userEvent.setup();
+    renderEditor({
+      // No language on the fence: react-markdown stopped marking inline vs block
+      // with a prop, and an unlabelled fence carries no class to test either, so
+      // this is the case that catches a `code` renderer dressing both the same.
+      current: { path: 'GUIDE.md', source: '```\nawait page.goto("/")\n```\n' },
+    });
+
+    await user.click(previewToggle()!);
+
+    const pane = screen.getByTestId('editor-preview');
+    const pre = pane.querySelector('pre');
+    expect(pre).not.toBeNull();
+    expect(pre!.textContent).toContain('await page.goto("/")');
+  });
+
+  it('goes back to the source on a second press', async () => {
+    const user = userEvent.setup();
+    renderEditor({ current: { path: 'GUIDE.md', source: GUIDE } });
+
+    await user.click(previewToggle()!);
+    expect(screen.queryByTestId('editor-preview')).toBeInTheDocument();
+
+    await user.click(previewToggle()!);
+    expect(screen.queryByTestId('editor-preview')).not.toBeInTheDocument();
+  });
+
+  it('links leave the app rather than navigate the renderer', async () => {
+    const user = userEvent.setup();
+    renderEditor({
+      current: { path: 'GUIDE.md', source: '[docs](https://playwright.dev/docs/api/class-page)' },
+    });
+
+    await user.click(previewToggle()!);
+
+    const link = within(screen.getByTestId('editor-preview')).getByRole('link', { name: 'docs' });
+    // main's setWindowOpenHandler answers this with shell.openExternal and
+    // denies the navigation; an in-page href would replace the whole app.
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+});
+
+/**
+ * The complaint this answers: "the area I write code in feels cramped". The
+ * panels around the file are what take the room, so the wide view folds them.
+ */
+describe('CodeEditor — the wide view', () => {
+  const renderWide = () =>
+    render(
+      <I18nProvider>
+        <CodeEditor
+          {...baseProps()}
+          scripts={scriptsWithFolders}
+          beforeGrid={<div data-testid="before-grid">browser bar</div>}
+        />
+      </I18nProvider>,
+    );
+
+  it('folds the file tree and the panel above the grid, and Esc brings them back', async () => {
+    const user = userEvent.setup();
+    renderWide();
+
+    expect(screen.getByTestId('before-grid')).toBeInTheDocument();
+    expect(dragRow('a.ts')).not.toBeNull();
+
+    await user.click(screen.getByTestId('editor-focus-toggle'));
+    expect(screen.queryByTestId('before-grid')).not.toBeInTheDocument();
+    expect(dragRow('a.ts')).toBeNull();
+
+    // A mode that hides the tree has to be leavable without finding the button
+    // that hid it.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByTestId('before-grid')).toBeInTheDocument();
+    expect(dragRow('a.ts')).not.toBeNull();
+  });
+
+  it('keeps the output panel — a run still has somewhere to report', async () => {
+    const user = userEvent.setup();
+    renderWide();
+
+    await user.click(screen.getByTestId('editor-focus-toggle'));
+    expect(screen.getByText(/^(Output|출력)$/)).toBeInTheDocument();
   });
 });

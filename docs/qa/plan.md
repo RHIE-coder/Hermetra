@@ -56,6 +56,7 @@ Hermetra 는 외부 도구(Chromium · Appium · 실기기)를 몰고 다니는 
 
 | TestScenario | 문서 | 덮는 Service |
 |---|---|---|
+| 스튜디오 (브라우저 작업대) | `scenarios/studio.md` | `studio` |
 | 데이터 파이프라인 | `scenarios/pipeline.md` | `pipeline` |
 | 웹 자동화 | `scenarios/web.md` | `web` |
 | 모바일 자동화 | `scenarios/mobile.md` | `mobile` |

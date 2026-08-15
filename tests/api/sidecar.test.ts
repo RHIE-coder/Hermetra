@@ -25,11 +25,14 @@ function fakeChild() {
   const child = new EventEmitter() as EventEmitter & {
     pid: number;
     stdout: typeof stdout;
+    stdin: { written: string[]; write: (s: string) => void } | null;
     kill: (s?: string) => void;
     killedWith: string | null;
   };
   child.pid = 777;
   child.stdout = stdout;
+  const stdin = { written: [] as string[], write: (s: string) => stdin.written.push(s) };
+  child.stdin = stdin;
   child.killedWith = null;
   child.kill = (s) => { child.killedWith = s ?? null; };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,6 +65,20 @@ describe('sidecar adapter — stdout arrives in chunks, not lines', () => {
 
   it('reports the pid it was given', () => {
     expect(toSidecarProcess(fakeChild()).pid).toBe(777);
+  });
+
+  it('writes requests onto the child stdin', () => {
+    const child = fakeChild();
+    toSidecarProcess(child).write('{"id":1,"op":"pages"}\n');
+    expect(child.stdin.written).toEqual(['{"id":1,"op":"pages"}\n']);
+  });
+
+  it('survives a child with no stdin rather than throwing', () => {
+    // The spawn-failed path builds a handle with no streams at all, and a
+    // screen may still fire a request at it before the death lands.
+    const child = fakeChild();
+    child.stdin = null;
+    expect(() => toSidecarProcess(child).write('{}\n')).not.toThrow();
   });
 
   it('kills with SIGTERM so the child can close the browser', () => {

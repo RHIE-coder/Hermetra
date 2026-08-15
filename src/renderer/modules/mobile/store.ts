@@ -85,6 +85,7 @@ interface MobileState {
   runScript: (source: string) => Promise<void>;
   // scripts
   listScripts: () => Promise<void>;
+  reloadScripts: () => Promise<void>;
   loadScript: (path: string) => Promise<void>;
   saveScript: (body: ScriptFileBody) => Promise<void>;
   deleteScript: (path: string) => Promise<void>;
@@ -306,6 +307,16 @@ export const useMobileStore = create<MobileState>((set, get) => ({
   listScripts: async () => {
     const scripts = await invoke(CHANNELS.MOBILE_SCRIPTS_LIST);
     set({ scripts });
+  },
+
+  /**
+   * Start again against the workspace that is active now — the tree *and* the
+   * buffer, which belongs to the workspace being left. See the studio store for
+   * the long version; the three script screens answer a switch the same way.
+   */
+  reloadScripts: async () => {
+    const scripts = await invoke(CHANNELS.MOBILE_SCRIPTS_LIST);
+    set({ scripts, currentScript: null });
   },
 
   loadScript: async (path) => {

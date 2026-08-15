@@ -1,393 +1,247 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  StudioSession,
-  type SessionBrowser,
-  type SessionContext,
-  type SessionPage,
-} from '@main/services/studioSession';
+import { StudioSession, type StudioRpc } from '@main/services/studioSession';
+import type { StudioLogLine } from '@shared/types/studio';
+import type { SidecarCall } from '@main/sidecar/protocol';
 
 /**
- * The pure half of the pipeline session: what to do with a browser once the
- * sidecar has one running. A browser is injected, so nothing here launches
- * Camoufox, opens a socket or touches disk.
+ * The session is what the screen talks to: a state machine over one request
+ * channel. The browser is **not** here — it lives in the sidecar, because a
+ * second Playwright client sees `contexts = 0` and would hand a script an empty
+ * browser (`docs/spec/studio/browser.md` — `studio.session`).
  *
- * Spec: docs/spec/pipeline/jobs.md — `pipeline.session`.
+ * The channel is injected, so every branch below (attach, re-attach onto a
+ * restarted sidecar, detach mid-connect, a step that throws) runs with no
+ * process and no socket.
  */
 
-function fakePage(url = 'about:blank') {
-  const page = {
-    current: url,
-    closed: false,
-    fronted: 0,
-    gotoFails: null as string | null,
-    url: () => page.current,
-    title: async () => `title of ${page.current}`,
-    goto: async (to: string) => {
-      if (page.gotoFails) throw new Error(page.gotoFails);
-      page.current = to;
+type Sent = SidecarCall;
+
+function fakeRpc(over: { fail?: string; hang?: boolean } = {}) {
+  const sent: Sent[] = [];
+  let pages = [{ index: 0, title: 'about:blank', url: 'about:blank', isActive: true }];
+  let logTo: ((l: StudioLogLine) => void) | undefined;
+  let release: (() => void) | undefined;
+
+  const rpc: StudioRpc = {
+    send: async (req) => {
+      sent.push(req);
+      if (over.hang) await new Promise<void>((r) => { release = r; });
+      if (over.fail) throw new Error(over.fail);
+      if (req.op === 'run') return { ok: true, error: '', durationMs: 4 };
+      if (req.op === 'navigate') {
+        pages = [{ index: 0, title: req.url, url: req.url, isActive: true }];
+      }
+      if (req.op === 'new-tab') {
+        pages = [
+          { ...pages[0]!, isActive: false },
+          { index: 1, title: 'about:blank', url: 'about:blank', isActive: true },
+        ];
+      }
+      return { pages };
     },
-    close: async () => { page.closed = true; },
-    bringToFront: async () => { page.fronted += 1; },
+    onLog: (cb) => {
+      logTo = cb;
+      return () => { logTo = undefined; };
+    },
   };
-  return page;
+
+  return {
+    rpc,
+    sent,
+    emitLog: (line: StudioLogLine) => logTo?.(line),
+    release: () => release?.(),
+    setPages: (p: typeof pages) => { pages = p; },
+  };
 }
 
-function fakeBrowser() {
-  const pages: ReturnType<typeof fakePage>[] = [];
-  const context: SessionContext & { closed: boolean } = {
-    closed: false,
-    pages: () => pages.filter((p) => !p.closed) as unknown as SessionPage[],
-    newPage: async () => { const p = fakePage(); pages.push(p); return p as unknown as SessionPage; },
-    close: async () => { context.closed = true; },
-  };
-  const browser: SessionBrowser & { closed: boolean; context: typeof context } = {
-    closed: false,
-    context,
-    newContext: async () => context,
-    close: async () => { browser.closed = true; },
-  };
-  return browser;
+function makeSession(over: Parameters<typeof fakeRpc>[0] = {}) {
+  const wire = fakeRpc(over);
+  return { ...wire, session: new StudioSession({ rpc: wire.rpc, now: () => 1000 }) };
 }
 
-function makeSession(over: { connect?: (endpoint: string) => Promise<SessionBrowser> } = {}) {
-  const browsers: ReturnType<typeof fakeBrowser>[] = [];
-  const endpoints: string[] = [];
-  const connect =
-    over.connect ??
-    (async (endpoint: string) => {
-      endpoints.push(endpoint);
-      const b = fakeBrowser();
-      browsers.push(b);
-      return b;
-    });
-  let clock = 1000;
-  const session = new StudioSession({ connect, now: () => (clock += 1) });
-  return { session, browsers, endpoints };
-}
-
-describe('StudioSession — attaching to what the sidecar started', () => {
-  it('starts detached with nothing open', () => {
+describe('StudioSession — attaching', () => {
+  it('starts detached, holding nothing', () => {
     const { session } = makeSession();
-    expect(session.status().phase).toBe('detached');
-    expect(session.status().pages).toEqual([]);
-  });
-
-  it('attaches and opens one tab, so there is something to drive', async () => {
-    const { session, endpoints } = makeSession();
-    await session.attach('ws://x/1');
-
-    expect(endpoints).toEqual(['ws://x/1']);
-    expect(session.status().phase).toBe('attached');
-    expect(session.status().endpoint).toBe('ws://x/1');
-    expect(session.status().pages).toHaveLength(1);
-    expect(session.status().pages[0]!.isActive).toBe(true);
-  });
-
-  it('reports a failed connect instead of throwing — the screen has to say it', async () => {
-    const { session } = makeSession({
-      connect: async () => { throw new Error('ECONNREFUSED'); },
+    expect(session.status()).toEqual({
+      phase: 'detached',
+      endpoint: null,
+      pages: [],
+      lastError: null,
     });
-    await expect(session.attach('ws://dead/1')).resolves.toBeDefined();
-
-    expect(session.status().phase).toBe('error');
-    expect(session.status().lastError).toMatch(/ECONNREFUSED/);
-    expect(session.status().pages).toEqual([]);
   });
 
-  it('attaching again to the same endpoint is a no-op, not a second browser', async () => {
-    const { session, endpoints } = makeSession();
-    await session.attach('ws://x/1');
-    await session.attach('ws://x/1');
-    expect(endpoints).toEqual(['ws://x/1']);
+  it('attaches to a reported endpoint and lists what is open', async () => {
+    const { session, sent } = makeSession();
+    const status = await session.attach('ws://x/1');
+
+    expect(status.phase).toBe('attached');
+    expect(status.endpoint).toBe('ws://x/1');
+    expect(status.pages).toHaveLength(1);
+    expect(sent).toEqual([{ op: 'pages' }]);
   });
 
-  it('a restarted sidecar means a new endpoint — it drops the old one and takes it', async () => {
-    // The supervisor's backoff restarts hand out a different port every time.
-    // Holding the dead one would show tabs that are gone.
-    const { session, browsers, endpoints } = makeSession();
+  it('ignores a re-attach to the endpoint it already holds', async () => {
+    // The sidecar re-announces its status for reasons that have nothing to do
+    // with the browser, and each one must not throw the tabs away.
+    const { session, sent } = makeSession();
+    await session.attach('ws://x/1');
+    await session.attach('ws://x/1');
+    expect(sent).toHaveLength(1);
+  });
+
+  it('takes a different endpoint as a restarted sidecar and starts clean', async () => {
+    const { session, sent } = makeSession();
     await session.attach('ws://x/1');
     await session.attach('ws://x/2');
 
-    expect(endpoints).toEqual(['ws://x/1', 'ws://x/2']);
-    expect(browsers[0]!.closed).toBe(true);
     expect(session.status().endpoint).toBe('ws://x/2');
-    expect(session.status().pages).toHaveLength(1);
+    expect(sent).toHaveLength(2);
   });
 
-  it('detach closes what it opened and empties the tab list', async () => {
-    const { session, browsers } = makeSession();
-    await session.attach('ws://x/1');
-    await session.detach();
+  it('reports a refused attach instead of throwing', async () => {
+    const { session } = makeSession({ fail: 'connection refused' });
+    const status = await session.attach('ws://x/1');
 
-    expect(browsers[0]!.context.closed).toBe(true);
-    expect(browsers[0]!.closed).toBe(true);
-    expect(session.status().phase).toBe('detached');
-    expect(session.status().pages).toEqual([]);
-    expect(session.status().endpoint).toBeNull();
+    expect(status.phase).toBe('error');
+    expect(status.endpoint).toBeNull();
+    expect(status.lastError).toContain('refused');
   });
 
-  it('lets go of a browser that arrived after the session was detached', async () => {
-    // The sidecar can die inside the connect window. Adopting the late arrival
-    // would leave a live browser in a session everything else calls detached.
-    let release!: (b: SessionBrowser) => void;
-    const late = fakeBrowser();
-    const { session } = makeSession({
-      connect: () => new Promise<SessionBrowser>((resolve) => { release = resolve; }),
-    });
-
+  it('does not adopt a browser that arrives after it was let go', async () => {
+    const { session, release } = makeSession({ hang: true });
     const attaching = session.attach('ws://x/1');
     await session.detach();
-    release(late);
+    release();
     await attaching;
 
-    expect(late.closed).toBe(true);
     expect(session.status().phase).toBe('detached');
     expect(session.status().pages).toEqual([]);
   });
 
-  it('detach on a session that never attached is harmless', async () => {
-    const { session } = makeSession();
-    await expect(session.detach()).resolves.toBeUndefined();
-    expect(session.status().phase).toBe('detached');
-  });
-
-  it('emits a status on every transition', async () => {
+  it('emits a status update on every transition', async () => {
     const { session } = makeSession();
     const seen: string[] = [];
     session.on('status', (s) => seen.push(s.phase));
     await session.attach('ws://x/1');
-    await session.detach();
-    expect(seen).toEqual(['attaching', 'attached', 'detached']);
+    expect(seen).toEqual(['attaching', 'attached']);
   });
 });
 
 describe('StudioSession — driving the tabs', () => {
-  it('navigates the active tab and reports the new url', async () => {
-    const { session } = makeSession();
+  it('sends what the screen asked for and keeps the answer', async () => {
+    const { session, sent } = makeSession();
     await session.attach('ws://x/1');
-    const pages = await session.navigate('https://example.com');
-    expect(pages[0]!.url).toBe('https://example.com');
+
+    const pages = await session.navigate('https://naver.com');
+    expect(pages[0]!.url).toBe('https://naver.com');
+    expect(sent.at(-1)).toEqual({ op: 'navigate', url: 'https://naver.com' });
+    expect(session.status().pages[0]!.url).toBe('https://naver.com');
   });
 
-  it('assumes https for a bare host, the way a browser bar does', async () => {
-    const { session } = makeSession();
+  it('keeps the tabs when a navigation fails, and says why', async () => {
+    // A timeout is a fact about one navigation, not about the session.
+    const wire = fakeRpc();
+    const session = new StudioSession({
+      rpc: {
+        ...wire.rpc,
+        send: async (req) =>
+          req.op === 'navigate'
+            ? { pages: [{ index: 0, title: 'a', url: 'a', isActive: true }], error: 'Timeout 30000ms' }
+            : wire.rpc.send(req),
+      },
+    });
     await session.attach('ws://x/1');
-    const pages = await session.navigate('example.com');
-    expect(pages[0]!.url).toBe('https://example.com');
-  });
-
-  it('keeps a failed navigation as a reportable error, not a dead session', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    await session.navigate('https://ok.test');
-    // The page refuses the next hop the way a timeout would.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (session as any).activePage().gotoFails = 'net::ERR_TIMED_OUT';
     await session.navigate('https://slow.test');
 
     expect(session.status().phase).toBe('attached');
-    expect(session.status().lastError).toMatch(/ERR_TIMED_OUT/);
+    expect(session.status().lastError).toContain('Timeout');
+    expect(session.status().pages).toHaveLength(1);
   });
 
-  it('does nothing but say so when there is no browser', async () => {
-    const { session } = makeSession();
-    const pages = await session.navigate('https://example.com');
-    expect(pages).toEqual([]);
-    expect(session.status().phase).toBe('detached');
+  it('does not ask the sidecar anything while nothing is attached', async () => {
+    const { session, sent } = makeSession();
+    expect(await session.navigate('https://x')).toEqual([]);
+    expect(await session.newTab()).toEqual([]);
+    expect(await session.closePage(0)).toEqual([]);
+    expect(await session.setActive(0)).toEqual([]);
+    expect(sent).toEqual([]);
   });
 
-  it('opens a new tab and makes it the active one', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const pages = await session.newTab('https://second.test');
-
-    expect(pages).toHaveLength(2);
-    expect(pages[1]!.isActive).toBe(true);
-    expect(pages[1]!.url).toBe('https://second.test');
-  });
-
-  it('closing the active tab moves the mark rather than leaving it out of range', async () => {
+  it('forgets the tabs when it lets go', async () => {
     const { session } = makeSession();
     await session.attach('ws://x/1');
-    await session.newTab();
-    const pages = await session.closePage(1);
-
-    expect(pages).toHaveLength(1);
-    expect(pages[0]!.isActive).toBe(true);
-  });
-
-  it('ignores a tab index that is not there', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const pages = await session.closePage(9);
-    expect(pages).toHaveLength(1);
-  });
-
-  it('setActive brings that tab forward', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    await session.newTab();
-    const pages = await session.setActive(0);
-    expect(pages[0]!.isActive).toBe(true);
-    expect(pages[1]!.isActive).toBe(false);
+    await session.detach();
+    expect(session.status()).toMatchObject({ phase: 'detached', endpoint: null, pages: [] });
   });
 });
 
-describe('StudioSession — running a step against the live browser', () => {
-  it('runs the source with the page in scope and reports success', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const result = await session.runStep(`await page.goto('https://ran.test');`);
-
-    expect(result.ok).toBe(true);
-    expect(session.status().pages[0]!.url).toBe('https://ran.test');
-  });
-
-  it('streams every log line while the step is still running', async () => {
-    // The whole point of the workbench: a thirty-second step must not be a
-    // thirty-second blank screen.
-    const { session } = makeSession();
+describe('StudioSession — running a step', () => {
+  it('sends the script with where it lives, and stamps one run id', async () => {
+    const { session, sent } = makeSession();
     await session.attach('ws://x/1');
 
-    const lines: string[] = [];
-    let sawFirstBeforeEnd = false;
-    session.on('log', (l) => {
-      lines.push(l.text);
-      if (lines.length === 1) sawFirstBeforeEnd = !done;
+    const result = await session.runStep({
+      source: "log('hi')",
+      dir: '/ws/scripts/studio',
+      name: 'step.ts',
+      url: 'https://naver.com',
     });
 
-    let done = false;
-    const running = session
-      .runStep(`log('one'); await new Promise(r => setTimeout(r, 5)); log('two');`)
-      .then((r) => { done = true; return r; });
-
-    const result = await running;
-    expect(sawFirstBeforeEnd).toBe(true);
-    expect(lines).toEqual(['one', 'two']);
+    const run = sent.find((r) => r.op === 'run') as { runId: string };
+    expect(run).toMatchObject({
+      op: 'run',
+      dir: '/ws/scripts/studio',
+      name: 'step.ts',
+      source: "log('hi')",
+      url: 'https://naver.com',
+    });
     expect(result.ok).toBe(true);
+    expect(result.scriptId).toBe(run.runId);
+    // The script is allowed to navigate, so the tabs are re-read after it.
+    expect(sent.at(-1)).toEqual({ op: 'pages' });
   });
 
-  it('a step that throws is a failed run, not a lost session', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const result = await session.runStep(`throw new Error('selector missing');`);
+  it('refuses to run with nothing attached, and says so in the panel', async () => {
+    const { session, sent } = makeSession();
+    const lines: string[] = [];
+    session.on('log', (l: StudioLogLine) => lines.push(l.text));
+
+    const result = await session.runStep({ source: '', dir: '/ws', name: 'a.ts' });
 
     expect(result.ok).toBe(false);
-    expect(result.output).toMatch(/selector missing/);
-    expect(session.status().phase).toBe('attached'); // 브라우저는 살아 있다
+    expect(lines.join()).toMatch(/browser/i);
+    expect(sent).toEqual([]);
   });
 
-  it('emits the failure as a log line too, so the panel shows it in place', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const levels: string[] = [];
-    session.on('log', (l) => levels.push(l.level));
-    await session.runStep(`throw new Error('boom');`);
-    expect(levels).toContain('error');
-  });
+  it('reports a failed run without taking the session down with it', async () => {
+    const { session } = makeSession({ fail: 'ReferenceError: pge is not defined' });
+    const failing = new StudioSession({
+      rpc: {
+        send: async (req) => {
+          if (req.op === 'pages') return { pages: [{ index: 0, title: 'a', url: 'a', isActive: true }] };
+          throw new Error('ReferenceError: pge is not defined');
+        },
+        onLog: () => () => {},
+      },
+    });
+    await failing.attach('ws://x/1');
+    const result = await failing.runStep({ source: 'pge.goto()', dir: '/ws', name: 'a.ts' });
 
-  it('refuses to run with no browser and says what to do about it', async () => {
-    const { session } = makeSession();
-    const result = await session.runStep(`log('hi');`);
     expect(result.ok).toBe(false);
-    expect(result.output).not.toBe('');
+    expect(result.output).toContain('ReferenceError');
+    expect(failing.status().phase).toBe('attached');
+    void session;
   });
 
-  it('runs a stage-shaped script by calling what it exports', async () => {
-    // The seed this screen ships exports `extract`. Wrapping a module in a
-    // statement body throws `Unexpected token 'export'` before anything runs,
-    // which made the default script the one script that could not be run.
-    const { session } = makeSession();
+  it('passes the sidecar\'s log lines through as they arrive', async () => {
+    const { session, emitLog } = makeSession();
     await session.attach('ws://x/1');
-    const result = await session.runStep(
-      `export async function extract(page) {
-         await page.goto('https://stage.test');
-         return [{ title: ' a ' }];
-       }`,
-    );
 
-    expect(result.ok).toBe(true);
-    expect(session.status().pages[0]!.url).toBe('https://stage.test');
-  });
+    const lines: StudioLogLine[] = [];
+    session.on('log', (l: StudioLogLine) => lines.push(l));
+    emitLog({ runId: 'r1', at: 5, level: 'log', text: 'from the script' });
 
-  it('hands the address bar to the script as ctx.url', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    await session.runStep(
-      `export async function extract(page, ctx) { await page.goto(ctx.url); }`,
-      { url: 'https://from-the-bar.test' },
-    );
-    expect(session.status().pages[0]!.url).toBe('https://from-the-bar.test');
-  });
-
-  it('shows what the stage returned, since that is the thing being checked', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const lines: string[] = [];
-    session.on('log', (l) => lines.push(l.text));
-    await session.runStep(`export async function extract() { return [{ title: 'row' }]; }`);
-
-    expect(lines.join('\n')).toMatch(/row/);
-  });
-
-  it('chains transform onto extract — that pair is the pipeline in miniature', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const lines: string[] = [];
-    session.on('log', (l) => lines.push(l.text));
-    await session.runStep(
-      `export async function extract() { return [{ title: '  padded  ' }]; }
-       export function transform(raw) { return raw.map((r) => ({ title: r.title.trim() })); }`,
-    );
-
-    const said = lines.join('\n');
-    expect(said).toMatch(/"padded"/);
-    expect(said).not.toMatch(/ {2}padded/);
-  });
-
-  it('leaves transform alone when there is nothing for it to transform', async () => {
-    // Exported on its own it has no input. Calling it with undefined would turn
-    // a fine script into a crash the author did not write.
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const result = await session.runStep(`export function transform(raw) { return raw.length; }`);
-    expect(result.ok).toBe(true);
-  });
-
-  it('still runs a plain snippet with no exports at all', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const lines: string[] = [];
-    session.on('log', (l) => lines.push(l.text));
-    const result = await session.runStep(`log('plain'); await page.goto('https://plain.test');`);
-
-    expect(result.ok).toBe(true);
-    expect(lines).toEqual(['plain']);
-    expect(session.status().pages[0]!.url).toBe('https://plain.test');
-  });
-
-  it('accepts the other export shapes without treating them as stages', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const result = await session.runStep(
-      `export const LIMIT = 3;
-       export default function helper() { return LIMIT; }
-       log('limit is ' + helper());`,
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  it('tags every line of one run with the same id, so two runs do not interleave', async () => {
-    const { session } = makeSession();
-    await session.attach('ws://x/1');
-    const ids = new Set<string>();
-    session.on('log', (l) => ids.add(l.runId));
-
-    await session.runStep(`log('a'); log('b');`);
-    expect(ids.size).toBe(1);
-
-    await session.runStep(`log('c');`);
-    expect(ids.size).toBe(2);
+    expect(lines).toEqual([{ runId: 'r1', at: 5, level: 'log', text: 'from the script' }]);
   });
 });
 

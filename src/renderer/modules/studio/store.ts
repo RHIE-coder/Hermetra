@@ -47,10 +47,11 @@ interface PipelineState {
   newTab: (url?: string) => Promise<void>;
   closePage: (index: number) => Promise<void>;
   setActive: (index: number) => Promise<void>;
-  runStep: (source: string, url?: string) => Promise<void>;
+  runStep: (source: string, path?: string, url?: string) => Promise<void>;
   clearLog: () => void;
 
   listScripts: () => Promise<void>;
+  reloadScripts: () => Promise<void>;
   loadScript: (path: string) => Promise<void>;
   saveScript: (body: ScriptFileBody) => Promise<void>;
   deleteScript: (path: string) => Promise<void>;
@@ -117,12 +118,14 @@ export const useStudioStore = create<PipelineState>((set, get) => ({
     set({ session: { ...get().session, pages } });
   },
 
-  runStep: async (source, url) => {
+  runStep: async (source, path, url) => {
     set({ busy: true });
     try {
       // The output already arrived line by line on EVT_STUDIO_LOG; what comes
       // back is the verdict, and only a failure adds anything the log missed.
-      await invoke(CHANNELS.STUDIO_SESSION_RUN, { source, url });
+      // `path` travels with it: the script is imported as a module, so where it
+      // lives is what its own imports resolve against.
+      await invoke(CHANNELS.STUDIO_SESSION_RUN, { source, path, url });
     } finally {
       set({ busy: false });
     }
@@ -131,6 +134,19 @@ export const useStudioStore = create<PipelineState>((set, get) => ({
   clearLog: () => set({ log: [] }),
 
   listScripts: async () => set({ scripts: await invoke(CHANNELS.STUDIO_SCRIPTS_LIST) }),
+
+  /**
+   * Start again against the workspace that is active now.
+   *
+   * Scripts live under the workspace folder, so a switch changes which files
+   * exist — and the buffer in the editor belongs to the workspace being left.
+   * Kept, it leaves one workspace's file open above another workspace's tree,
+   * which reads as "switching did nothing to my scripts". Both go in one update:
+   * a moment with the buffer cleared and the old tree still up is a moment the
+   * editor auto-picks a file that is about to stop existing.
+   */
+  reloadScripts: async () =>
+    set({ scripts: await invoke(CHANNELS.STUDIO_SCRIPTS_LIST), currentScript: null }),
 
   loadScript: async (path) => {
     set({ currentScript: await invoke(CHANNELS.STUDIO_SCRIPTS_READ, { path }) });

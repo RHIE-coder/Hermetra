@@ -82,7 +82,7 @@
 
 ## TestSuite: 오버레이 — 몸짓이 갈래를 가르고, 메모창이 묶는다
 
-구현: `src/renderer/components/dev-feedback/feedback-overlay.test.tsx` (28)
+구현: `src/renderer/components/dev-feedback/feedback-overlay.test.tsx` (30)
 
 | Case | 무엇 | 덮는 노드 | 계층 | 구현 |
 |---|---|---|---|---|
@@ -112,6 +112,8 @@
 | CASE-tools-086 | 쌓은 것도 그린 것도 없으면 훑어보기가 잠긴다 | `tools.dev-feedback.review` | UI | 같은 파일 |
 | CASE-tools-087 | Esc 가 고르기를 훑어보기보다 먼저 걷는다 | `tools.dev-feedback.review` | UI | 같은 파일 |
 | CASE-tools-088 | 뺀 화면의 썸네일이 그 번호를 물려받은 화면 밑에 안 앉는다 | `tools.dev-feedback.review` | UI | 같은 파일 |
+| CASE-tools-089 | 오버레이 위의 누름이 앱의 `document`·`window` 바깥클릭 처리기에 안 닿는다(열어 둔 팝업이 그대로 있다) | `tools.dev-feedback.mark` | UI | 같은 파일 |
+| CASE-tools-093 | 오버레이를 접으면 앱이 다시 그 누름을 받는다 | `tools.dev-feedback.mark` | UI | 같은 파일 |
 
 ## TestSuite: 저장 — 초안으로 쌓고 폴더로 끝낸다
 

@@ -24,6 +24,9 @@
 | CASE-workspace-013 | 전환기의 전환·이름 바꾸기·삭제·만들기가 동작한다 | `workspace.switcher.list` | UI | 미구현 |
 | CASE-workspace-014 | 하나뿐일 때 삭제 시 안내를 보인다 | `workspace.switcher.list` | UI | 미구현 |
 | CASE-workspace-015 | 전환하면 각 모듈 상태가 그 워크스페이스로 다시 읽힌다 | `workspace.switcher.list` | UI | 미구현 |
+| CASE-workspace-016 | 전환하면 스크립트 목록이 그 워크스페이스의 것으로 바뀐다 | `workspace.switcher.list` | UI | `src/renderer/modules/studio/store.test.ts` |
+| CASE-workspace-017 | 전환하면 편집기에 열려 있던 파일도 같이 놓인다 | `workspace.switcher.list` | UI | 같은 파일 |
+| CASE-workspace-018 | 목록 교체와 편집기 비우기가 한 갱신으로 같이 일어난다 | `workspace.switcher.list` | UI | 같은 파일 |
 
 ## TestSuite: `app.shell` — 앱 셸
 

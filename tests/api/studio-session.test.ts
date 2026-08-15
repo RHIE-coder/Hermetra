@@ -91,7 +91,11 @@ describe('pipeline session on the mock browser', () => {
     workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-seed-'));
     try {
       const { scriptsService } = await import('@main/services/scripts');
-      const [seed] = scriptsService.list('studio').filter((f) => f.type === 'file');
+      // The listing is wider than the runnable set — `GUIDE.md` sits in it too —
+      // so "the first file" is not the same thing as "the script".
+      const [seed] = scriptsService
+        .list('studio')
+        .filter((f) => f.type === 'file' && /\.tsx?$/.test(f.path));
       const { source } = scriptsService.read('studio', seed!.path);
 
       const session = createStudioSession();
@@ -99,7 +103,10 @@ describe('pipeline session on the mock browser', () => {
       const lines: string[] = [];
       session.on('log', (l) => lines.push(`${l.level}:${l.text}`));
 
-      const result = await session.runStep(source, { url: 'https://seed.test' });
+      // Located the way the handler does it: the seed is imported from the
+      // folder it was written to, which is what makes its imports resolvable.
+      const { dir, name } = scriptsService.locate('studio', seed!.path);
+      const result = await session.runStep({ source, dir, name, url: 'https://seed.test' });
 
       expect(result.ok).toBe(true);
       expect(lines.filter((l) => l.startsWith('error:'))).toEqual([]);
@@ -111,17 +118,26 @@ describe('pipeline session on the mock browser', () => {
   });
 
   it('runs a step and streams its output before returning a verdict', async () => {
-    const session = createStudioSession();
-    await session.attach('ws://mock/1');
+    workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-step-'));
+    try {
+      const { scriptsService } = await import('@main/services/scripts');
+      const session = createStudioSession();
+      await session.attach('ws://mock/1');
 
-    const lines: string[] = [];
-    session.on('log', (l) => lines.push(l.text));
-    const result = await session.runStep(`log('step ran'); await page.goto('https://x.test');`);
+      const lines: string[] = [];
+      session.on('log', (l) => lines.push(l.text));
+      const result = await session.runStep({
+        source: `log('step ran'); await page.goto('https://x.test');`,
+        ...scriptsService.locate('studio', 'scratch.ts'),
+      });
 
-    expect(lines).toEqual(['step ran']);
-    expect(result.ok).toBe(true);
-    expect(session.status().pages[0]!.url).toBe('https://x.test');
+      expect(lines).toEqual(['step ran']);
+      expect(result.ok).toBe(true);
+      expect(session.status().pages[0]!.url).toBe('https://x.test');
 
-    await session.detach();
+      await session.detach();
+    } finally {
+      fs.rmSync(workspaceDir, { recursive: true, force: true });
+    }
   });
 });

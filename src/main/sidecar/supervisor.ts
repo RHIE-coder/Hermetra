@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { IDLE_SIDECAR, type SidecarStatus } from '@shared/types/studio';
+import { decodeFrame, encodeLine, type SidecarRequest } from './protocol';
 
 /**
  * The pure half of the fetch sidecar: a state machine plus a restart policy.
@@ -15,6 +16,8 @@ export interface SidecarProcess {
   pid: number | null;
   onStdoutLine(cb: (line: string) => void): void;
   onExit(cb: (code: number | null, signal: string | null) => void): void;
+  /** One encoded frame onto the child's stdin. */
+  write(line: string): void;
   kill(): void;
 }
 
@@ -33,9 +36,6 @@ export interface SupervisorOptions {
   /** Consecutive automatic restarts before giving up and waiting for a person. */
   maxRestarts?: number;
 }
-
-/** The child announces its endpoint on stdout as `WS ws://…` and nothing else. */
-const ENDPOINT_LINE = /^WS\s+(ws:\/\/\S+)\s*$/;
 
 const defaultBackoff = (attempt: number) => Math.min(2 ** (attempt - 1) * 1000, 30_000);
 
@@ -90,12 +90,18 @@ export class SidecarSupervisor extends EventEmitter {
     this.set({ phase: 'starting', pid: child.pid, endpoint: null, retryInMs: null });
 
     child.onStdoutLine((line) => {
-      const hit = ENDPOINT_LINE.exec(line);
-      if (!hit) return; // progress chatter and blank lines are not our business
+      const frame = decodeFrame(line);
+      if (!frame) return; // progress chatter and blank lines are not our business
+      if (frame.t !== 'ready') {
+        // A reply or a log line: it belongs to whoever asked, not to the phase
+        // machine. Passed on rather than interpreted here.
+        this.emit('frame', frame);
+        return;
+      }
       // Reaching ready is what "the last start worked" means, so the restart
       // budget resets here — a sidecar that recovers must not stay one crash
       // away from being given up on forever.
-      this.set({ phase: 'ready', endpoint: hit[1]!, restarts: 0, lastError: null });
+      this.set({ phase: 'ready', endpoint: frame.endpoint, restarts: 0, lastError: null });
     });
 
     child.onExit((code, signal) => {
@@ -126,6 +132,19 @@ export class SidecarSupervisor extends EventEmitter {
         this.launch();
       }, wait);
     });
+  }
+
+  /**
+   * Hand one request to the child.
+   *
+   * Returns whether there was anyone to hand it to. A screen can ask for tabs
+   * while the sidecar is down, and "no" is an answer — throwing here would make
+   * every caller handle an exception for an ordinary state.
+   */
+  send(request: SidecarRequest): boolean {
+    if (!this.child) return false;
+    this.child.write(encodeLine(request));
+    return true;
   }
 
   /** Deliberate. Cancels any pending restart — a person's decision outranks the policy. */

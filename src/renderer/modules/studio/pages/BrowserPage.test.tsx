@@ -168,6 +168,85 @@ describe('Browser bench — the studio workbench', () => {
     expect(selected.className).not.toContain('bg-muted');
   });
 
+  // The other half of that: telling the tabs apart from the address bar left
+  // them with no edge at all, so the list read as loose text and nothing said
+  // the rows could be pressed (2026-08-14 feedback).
+  it('outlines every tab row, selected or not', async () => {
+    setup();
+    await screen.findByTestId('page-studio-browser');
+    useStudioStore.setState({
+      session: session({
+        phase: 'attached',
+        endpoint: 'ws://x/1',
+        pages: [
+          { index: 0, title: 'a', url: 'https://a.test', isActive: false },
+          { index: 1, title: 'b', url: 'https://b.test', isActive: true },
+        ],
+      }),
+    });
+
+    for (const url of ['https://a.test', 'https://b.test']) {
+      const row = await screen.findByRole('button', { name: url });
+      expect(row.className).toContain('border-border');
+    }
+  });
+
+  // The panel is the tallest thing above the editor and the tabs are set up
+  // once, so it folds — but never the row that says whether the browser is up.
+  it('folds the address bar and the tab list away, keeping the status row', async () => {
+    setup();
+    await screen.findByTestId('page-studio-browser');
+    useStudioStore.setState({
+      session: session({
+        phase: 'attached',
+        endpoint: 'ws://x/1',
+        pages: [{ index: 0, title: 'a', url: 'https://a.test', isActive: true }],
+      }),
+    });
+    await screen.findByTestId('studio-tabs');
+
+    await userEvent.click(screen.getByTestId('studio-browser-fold'));
+    expect(screen.queryByTestId('studio-url')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('studio-tabs')).not.toBeInTheDocument();
+    expect(screen.getByTestId('studio-browser-toggle')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('studio-browser-fold'));
+    expect(screen.getByTestId('studio-url')).toBeInTheDocument();
+    expect(screen.getByTestId('studio-tabs')).toBeInTheDocument();
+  });
+
+  // The wide view unmounts the whole bar. If the fold lived inside it, one press
+  // of that button would silently undo the choice.
+  it('remembers the fold across the wide view', async () => {
+    setup();
+    await screen.findByTestId('page-studio-browser');
+
+    await userEvent.click(screen.getByTestId('studio-browser-fold'));
+    expect(screen.queryByTestId('studio-url')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('editor-focus-toggle'));
+    expect(screen.queryByTestId('studio-browser-bar')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('editor-focus-toggle'));
+    expect(screen.getByTestId('studio-browser-bar')).toBeInTheDocument();
+    expect(screen.queryByTestId('studio-url')).not.toBeInTheDocument();
+  });
+
+  it('still says the browser died while the panel is folded', async () => {
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === 'studio:sidecar:status') {
+        return sidecar({ phase: 'crashed', lastError: 'died on SIGSEGV' });
+      }
+      if (channel === 'studio:session:status') return session();
+      return [];
+    });
+    setup();
+    await screen.findByText(/SIGSEGV/);
+
+    await userEvent.click(screen.getByTestId('studio-browser-fold'));
+    expect(screen.getByText(/SIGSEGV/)).toBeInTheDocument();
+  });
+
   it('shows a step’s output as each line arrives, not when it ends', async () => {
     // The reason the log is an event stream at all: a long step must not leave
     // the panel blank until it finishes.

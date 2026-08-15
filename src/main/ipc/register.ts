@@ -38,10 +38,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   // The fetch sidecar is not started here — the pipeline asks for it when it
   // needs a browser, and a stealth browser idling for a user who never opens
   // that screen is pure cost.
-  const sidecar = createSidecarSupervisor(__dirname);
-  // The session holds the browser; the sidecar only starts one. Keeping them
-  // apart is what lets the browser outlive every step a person runs.
-  const session = createStudioSession();
+  // `import.meta.dirname`, not `__dirname`: a bare `__dirname` anywhere in main
+  // makes electron-vite inject its CommonJS shim, and that shim plants itself
+  // after the last line of the chunk that *looks* like an import — including one
+  // inside a seed script's text, which then arrives at the user truncated and
+  // takes the main process down with it (2026-08-11, again on 2026-08-13).
+  const sidecar = createSidecarSupervisor(import.meta.dirname);
+  // The sidecar holds the browser and runs the scripts; the session is this
+  // side's view of it. Keeping them apart is what lets the browser outlive
+  // every step a person runs.
+  const session = createStudioSession(sidecar);
   const userDataDir = app.isReady() ? app.getPath('userData') : process.cwd();
   const myDevices = myDevicesService(userDataDir);
 
@@ -340,8 +346,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(CHANNELS.STUDIO_SESSION_SET_ACTIVE, (_e, { index }: { index: number }) =>
     session.setActive(index),
   );
-  ipcMain.handle(CHANNELS.STUDIO_SESSION_RUN, (_e, p: { source: string; url?: string }) =>
-    session.runStep(p.source, { url: p.url }),
+  ipcMain.handle(
+    CHANNELS.STUDIO_SESSION_RUN,
+    (_e, p: { source: string; path?: string; url?: string }) => {
+      // Where the file lives is half the run: the sidecar writes the buffer
+      // beside it so `./lib/…` and the workspace's own `node_modules` resolve
+      // from the place the person is actually editing.
+      const { dir, name } = scriptsService.get().locate('studio', p.path);
+      return session.runStep({ source: p.source, dir, name, url: p.url });
+    },
   );
 
   /* ── Data pipeline — scripts ─────────────────────────────────────── */

@@ -4,6 +4,14 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // The sidecar's sources are copied, not bundled, and a real Node runtime
+    // imports them by their actual filenames — so `./runner.ts` is the specifier
+    // that has to work at runtime (src/main/sidecar/host/launcher.ts).
+    "allowImportingTsExtensions": true,
+    // The sidecar half is stripped, not compiled, so nothing in main may use
+    // syntax that needs emitting (parameter properties, enums, namespaces).
+    // Caught the hard way: the runtime refused browser.ts on first launch.
+    "erasableSyntaxOnly": true,
     "lib": ["ES2022"],
     "types": ["node", "electron-vite/node"],
     "strict": true,

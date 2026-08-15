@@ -7,24 +7,33 @@ import react from '@vitejs/plugin-react';
 const r = (p: string) => path.resolve(path.dirname(fileURLToPath(import.meta.url)), p);
 
 /**
- * The fetch sidecar's launcher is **not** part of the main bundle: it runs under
- * a real Node runtime, not Electron (`src/main/sidecar/launcher.mjs` says why).
+ * The fetch sidecar is **not** part of the main bundle: it runs under a real
+ * Node runtime, not Electron (`src/main/sidecar/host/launcher.ts` says why).
  * Rollup therefore never sees it, and without this it is simply missing from a
  * built app — where the sidecar would report "launcher not found" forever.
+ *
+ * Copied as **source**, extensions and all. The runtime it runs on strips the
+ * types itself, which is the same mechanism a user's `.ts` script relies on;
+ * compiling this half would mean two ways of loading TypeScript in one process.
+ * `protocol.ts` rides along because both halves import it — bundled into main,
+ * loaded as a file out here.
  */
-const copySidecarLauncher = () => ({
-  name: 'hermetra:copy-sidecar-launcher',
+const copySidecarHost = () => ({
+  name: 'hermetra:copy-sidecar-host',
   closeBundle() {
-    const from = r('src/main/sidecar/launcher.mjs');
-    const to = r('out/main/launcher.mjs');
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.copyFileSync(from, to);
+    const host = r('src/main/sidecar/host');
+    const out = r('out/main/host');
+    fs.mkdirSync(out, { recursive: true });
+    for (const file of fs.readdirSync(host)) {
+      fs.copyFileSync(path.join(host, file), path.join(out, file));
+    }
+    fs.copyFileSync(r('src/main/sidecar/protocol.ts'), r('out/main/protocol.ts'));
   },
 });
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin(), copySidecarLauncher()],
+    plugins: [externalizeDepsPlugin(), copySidecarHost()],
     build: {
       outDir: 'out/main',
       lib: { entry: 'src/main/index.ts' },

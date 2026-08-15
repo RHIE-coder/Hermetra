@@ -4,6 +4,7 @@ import { AppShell } from './components/layout/app-shell';
 import { useBridgeStore } from './modules/bridge/store';
 import { useWebStore } from './modules/web/store';
 import { useMobileStore } from './modules/mobile/store';
+import { useStudioStore } from './modules/studio/store';
 import { useWorkspaceStore } from './modules/workspace/store';
 import { useVariablesStore } from './modules/shared/variablesStore';
 
@@ -34,8 +35,9 @@ export function App() {
   const initWorkspace = useWorkspaceStore((s) => s.init);
   const workspaceState = useWorkspaceStore((s) => s.state);
   const reinitVars = useVariablesStore((s) => s.init);
-  const listWebScripts = useWebStore((s) => s.listScripts);
-  const listMobileScripts = useMobileStore((s) => s.listScripts);
+  const reloadWebScripts = useWebStore((s) => s.reloadScripts);
+  const reloadMobileScripts = useMobileStore((s) => s.reloadScripts);
+  const reloadStudioScripts = useStudioStore((s) => s.reloadScripts);
 
   useEffect(() => {
     initWorkspace();
@@ -45,21 +47,39 @@ export function App() {
   }, [initWorkspace, initBridge, initWeb, initMobile]);
 
   // When the active workspace changes, reload workspace-scoped data.
+  //
+  // Every screen that holds workspace-scoped state belongs on this list, and a
+  // screen missing from it does not look broken — it looks like the switch did
+  // nothing, until some later action refetches and the old workspace's files
+  // vanish mid-session. The studio's browser bench was missing here from the day
+  // it moved out of the Data Pipeline service.
   const lastActiveId = useRef<string | null>(null);
   useEffect(() => {
     const id = workspaceState?.activeId ?? null;
     if (!id) return;
     if (lastActiveId.current && lastActiveId.current !== id) {
       void reinitVars();
-      void listWebScripts();
-      void listMobileScripts();
+      void reloadWebScripts();
+      void reloadMobileScripts();
+      void reloadStudioScripts();
       // Reload the rest by re-running module inits (no-op if already loaded).
+      // The studio's sidecar and session are not workspace-scoped — one browser
+      // is running, and a switch does not restart it.
       void initWeb();
       void initMobile();
       void initBridge();
     }
     lastActiveId.current = id;
-  }, [workspaceState?.activeId, reinitVars, listWebScripts, listMobileScripts, initWeb, initMobile, initBridge]);
+  }, [
+    workspaceState?.activeId,
+    reinitVars,
+    reloadWebScripts,
+    reloadMobileScripts,
+    reloadStudioScripts,
+    initWeb,
+    initMobile,
+    initBridge,
+  ]);
 
   return (
     <Routes>

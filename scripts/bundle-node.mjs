@@ -29,7 +29,12 @@ const arg = (name, fallback) => {
 const ROOT = path.resolve(import.meta.dirname, '..');
 // Pinned rather than "whatever is newest": a runtime that changes under you
 // turns one packaged build into a different one for no recorded reason.
-const VERSION = arg('version', 'v22.14.0');
+//
+// Not any pin, though. The workbench imports the user's `.ts` script directly
+// and lets the runtime strip its types (docs/spec/studio/browser.md —
+// `AC-studio.browser-21`), which needs a Node that does that unflagged. 22.14
+// did not, so this line is a requirement, not a preference.
+const VERSION = arg('version', 'v24.19.0');
 const PLATFORM = arg('platform', process.platform);
 const ARCH = arg('arch', process.arch);
 const OUT_DIR = path.join(ROOT, 'resources', 'node');

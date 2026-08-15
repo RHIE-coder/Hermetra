@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SidecarSupervisor, type SidecarLaunchOptions, type SidecarProcess } from './supervisor';
+import { createLineSplitter } from './protocol';
 import { hostSpoofOs } from './spoof';
 
 /**
@@ -37,12 +38,19 @@ export function resolveNodeRuntime(env: NodeJS.ProcessEnv = process.env): string
   return null;
 }
 
-/** Where `launcher.mjs` sits. Built output and source tree put it in different places. */
+/**
+ * Where the sidecar's entry sits. Built output and source tree put it in
+ * different places.
+ *
+ * It is a `.ts` file and stays one: the runtime that runs it strips types on
+ * its own, and that is the same mechanism the user's scripts rely on. A build
+ * step here would mean two ways of loading TypeScript in one process.
+ */
 export function resolveLauncher(dirname: string): string | null {
   for (const p of [
-    path.join(dirname, 'launcher.mjs'),
-    path.join(dirname, 'sidecar', 'launcher.mjs'),
-    path.join(process.resourcesPath ?? '', 'sidecar', 'launcher.mjs'),
+    path.join(dirname, 'host', 'launcher.ts'),
+    path.join(dirname, 'sidecar', 'host', 'launcher.ts'),
+    path.join(process.resourcesPath ?? '', 'sidecar', 'host', 'launcher.ts'),
   ]) {
     if (p && fs.existsSync(p)) return p;
   }
@@ -125,21 +133,17 @@ export function sidecarEnv(
 export function toSidecarProcess(child: {
   pid?: number;
   stdout: NodeJS.ReadableStream | null;
+  stdin: NodeJS.WritableStream | null;
   on(event: 'exit', cb: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
   on(event: 'error', cb: (err: Error) => void): unknown;
   kill(signal?: NodeJS.Signals): unknown;
 }): SidecarProcess {
   let onLine: ((line: string) => void) | undefined;
   let onExit: ((code: number | null, signal: string | null) => void) | undefined;
-  let buffered = '';
 
+  const feed = createLineSplitter((line) => onLine?.(line));
   child.stdout?.setEncoding('utf8');
-  child.stdout?.on('data', (chunk: string) => {
-    buffered += chunk;
-    const lines = buffered.split('\n');
-    buffered = lines.pop() ?? '';
-    for (const line of lines) onLine?.(line.trim());
-  });
+  child.stdout?.on('data', (chunk: string) => feed(chunk));
 
   // A spawn that never started still has to reach the supervisor as a death,
   // otherwise it waits for an endpoint that is never coming.
@@ -150,6 +154,9 @@ export function toSidecarProcess(child: {
     pid: child.pid ?? null,
     onStdoutLine: (cb) => { onLine = cb; },
     onExit: (cb) => { onExit = cb; },
+    // A child that is already gone has no stdin. Writing into that is an
+    // ordinary race, not a fault — the request simply never lands.
+    write: (line) => { child.stdin?.write(line); },
     kill: () => { child.kill('SIGTERM'); },
   };
 }
@@ -167,12 +174,15 @@ export function createSidecarSupervisor(dirname: string): SidecarSupervisor {
           pid: null,
           onStdoutLine: () => {},
           onExit: (cb) => { setTimeout(() => cb(null, why), 0); },
+          write: () => {},
           kill: () => {},
         };
       }
       const child = spawn(node, [launcher], {
+        // stdin is a pipe now: requests go down it. The child that only ever
+        // announced an endpoint is now the one holding the browser.
         cwd: path.dirname(launcher),
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'],
         env: sidecarEnv(process.env, launch),
       });
       child.stderr?.setEncoding('utf8');
