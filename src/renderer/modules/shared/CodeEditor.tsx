@@ -781,10 +781,20 @@ export function CodeEditor({
 
       {beforeGrid && !focus && <div className="shrink-0">{beforeGrid}</div>}
 
+      {/*
+        `minmax(0,…)`, not a bare `1fr`. A grid track sized `1fr` still refuses
+        to go under its content's min-content width, and the editor's content is
+        Monaco — which reports the width it last laid out at. So dragging the
+        window narrower left the track at its old size and the whole screen
+        scrolled sideways instead, carrying the title and the file tree off the
+        left edge. (Tailwind's own `grid-cols-N` is `minmax(0,1fr)` for exactly
+        this reason, which is why the wide view never had the bug.)
+      */}
       <div
+        data-testid="editor-grid"
         className={cn(
           'grid min-h-[420px] flex-1 gap-4',
-          focus ? 'grid-cols-1' : 'grid-cols-[240px_1fr]',
+          focus ? 'grid-cols-1' : 'grid-cols-[240px_minmax(0,1fr)]',
         )}
       >
         {!focus && (
@@ -849,7 +859,10 @@ export function CodeEditor({
           </aside>
         )}
 
-        <div className="flex flex-col gap-3 min-h-0">
+        {/* `min-w-0` for the same reason one level down: this column is a flex
+            container, and a flex item defaults to refusing to shrink past its
+            content too. */}
+        <div className="flex min-w-0 flex-col gap-3 min-h-0">
           <div className="flex shrink-0 items-center justify-between gap-2 rounded-md border border-border bg-card/50 px-3 py-2">
             <div className="flex items-center gap-2 min-w-0">
               <FileCode className="h-3.5 w-3.5 text-muted-foreground" />

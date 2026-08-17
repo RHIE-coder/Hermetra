@@ -145,6 +145,12 @@
 | CASE-studio-118 | 브라우저 바를 접으면 주소창·탭이 사라지고 상태 줄은 남는다 | `studio.browser` | UI | `BrowserPage.test.tsx` |
 | CASE-studio-119 | 접기가 **넓게 보기를 건너 살아남는다** (그 모드가 바를 통째로 내린다) | `studio.browser` | UI | `BrowserPage.test.tsx` |
 | CASE-studio-120 | 접힌 채로도 브라우저가 죽은 이유가 보인다 | `studio.browser` | UI | `BrowserPage.test.tsx` |
+| CASE-studio-121 | 편집기 열이 자기 내용보다 작아질 수 있다 (창을 좁혀도 좌우 스크롤 없음) | `web.code.editor` | UI | `CodeEditor.test.tsx` |
+
+> `CASE-studio-121` 은 **선언을 못박지 픽셀을 못박지 않는다** — happy-dom 은 그리드 배치를
+> 계산하지 않는다. 실제 폭(1400→1200→1080→1000→960)에서 잰 값은 회차 기록
+> `runs/2026-08-17-workbench-narrow-width.md` 에 있다. 맨 `1fr` 한 글자면 결함이 돌아오고,
+> 그 한 글자를 이 케이스가 지킨다.
 
 ## e2e 로 안 덮는 것
 

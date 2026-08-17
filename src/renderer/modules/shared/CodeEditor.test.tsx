@@ -604,4 +604,20 @@ describe('CodeEditor — the wide view', () => {
     await user.click(screen.getByTestId('editor-focus-toggle'));
     expect(screen.getByText(/^(Output|출력)$/)).toBeInTheDocument();
   });
+
+  /**
+   * Narrowing the window used to scroll the whole screen sideways, carrying the
+   * title and the file tree off the left edge. A `1fr` track will not go under
+   * its content's min-content width, and this column's content is Monaco, which
+   * reports the width it last laid out at — so the track kept the wide size.
+   *
+   * happy-dom does not do grid layout, so this pins the declaration rather than
+   * the pixels; the measurement lives in the run record. A bare `1fr` here is
+   * the whole bug, and it is one character away from coming back.
+   */
+  it('sizes the editor track so it can shrink below its content', () => {
+    renderEditor({ scripts: scriptsWithFolders });
+
+    expect(screen.getByTestId('editor-grid').className).toContain('minmax(0,1fr)');
+  });
 });
