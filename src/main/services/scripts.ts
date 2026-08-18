@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ScriptFile, ScriptFileBody, ScriptMoveRequest } from '@shared/types/web';
 import { STUDIO_AMBIENT_DTS } from '@shared/studio/ambient';
+import { PAST_GUIDES } from './past-guides';
 import { workspaceManager } from './workspaceManager';
 
 type Slot = 'web' | 'mobile' | 'studio';
@@ -617,9 +618,8 @@ function ensureModuleRoot(root: string): void {
  * That is the trade: this is documentation the app ships, not the person's work,
  * and a guide you can lose for good is worse than one that reappears.
  *
- * A revised guide will need what the seed already has (replace only a copy that
- * is byte-for-byte one the app wrote). There is only one version of each so far,
- * so that machinery is not here yet.
+ * A revised guide gets what the starter script already had: replace only a copy
+ * that is byte-for-byte one the app wrote. `PAST_GUIDES` is the record of those.
  */
 function ensureGuide(slotDir: string): void {
   // The single English guide is gone as a name, not only as a file: left beside
@@ -631,12 +631,23 @@ function ensureGuide(slotDir: string): void {
   const legacy = path.join(slotDir, LEGACY_GUIDE);
   if (fs.existsSync(legacy)) fs.rmSync(legacy);
 
-  for (const [name, source] of [
-    [GUIDE_FILES[0], SEED_GUIDE_KO],
-    [GUIDE_FILES[1], SEED_GUIDE_EN],
+  for (const [name, source, past] of [
+    [GUIDE_FILES[0], SEED_GUIDE_KO, PAST_GUIDES.ko],
+    [GUIDE_FILES[1], SEED_GUIDE_EN, PAST_GUIDES.en],
   ] as const) {
     const file = path.join(slotDir, name);
-    if (!fs.existsSync(file)) fs.writeFileSync(file, source, 'utf-8');
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, source, 'utf-8');
+      continue;
+    }
+    // Written once and then left alone is not enough for a document that goes
+    // out of date. The first version of this pair described `export extract`,
+    // the runner dropped that convention hours later, and the copy on disk went
+    // on teaching it — the person does what the guide says and nothing happens.
+    // So a copy still byte-for-byte one of ours is replaced, and one changed
+    // line makes it theirs and it stays. Same rule the starter script has had.
+    const held = fs.readFileSync(file, 'utf-8');
+    if (past.some((old) => sameFile(held, old))) fs.writeFileSync(file, source, 'utf-8');
   }
 }
 

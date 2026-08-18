@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runModule } from '@main/sidecar/host/runner';
+import { PAST_GUIDES } from '@main/services/past-guides';
 
 let tmpDir: string;
 
@@ -318,9 +319,10 @@ describe('scripts service — the guide sits with the scripts, in both languages
   });
 
   it('leaves a guide the person has edited alone', async () => {
+    // Including against the replace above: one changed line makes it theirs.
     const { scriptsService } = await importFresh();
     scriptsService.list('studio');
-    const mine = '# my notes\n';
+    const mine = `${PAST_GUIDES.ko[0]}\n내 메모\n`;
     fs.writeFileSync(guide('ko'), mine, 'utf-8');
 
     scriptsService.list('studio');
@@ -352,6 +354,53 @@ describe('scripts service — the guide sits with the scripts, in both languages
     const { scriptsService } = await importFresh();
     const items = scriptsService.list('studio').map((i) => i.path);
     expect(items).toContain('example.ts');
+  });
+
+  it('replaces a guide it wrote itself when a newer one ships', async () => {
+    // The first version of the pair shipped with a section about
+    // `export extract`, and that convention left the runner the same day. Written
+    // once and then left alone, the copy on disk keeps teaching a feature the app
+    // no longer has — which is how the person ends up doing what the app told
+    // them and watching nothing happen. Same rule as the starter script: a copy
+    // still byte-for-byte ours is ours to replace.
+    fs.mkdirSync(slot(), { recursive: true });
+    fs.writeFileSync(guide('ko'), PAST_GUIDES.ko[0]!, 'utf-8');
+    fs.writeFileSync(guide('en'), PAST_GUIDES.en[0]!, 'utf-8');
+
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    for (const lang of ['ko', 'en'] as const) {
+      const held = fs.readFileSync(guide(lang), 'utf-8');
+      expect(held, `the retired ${lang} guide is still on disk`).not.toBe(
+        PAST_GUIDES[lang][0],
+      );
+      expect(held).not.toContain('export extract');
+    }
+  });
+
+  it('leaves the retired guides as a record, not a template', async () => {
+    // If what ships is ever added to this list, every listing rewrites the file
+    // and an edit a person makes survives exactly until the next one.
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    for (const lang of ['ko', 'en'] as const) {
+      expect(PAST_GUIDES[lang].length, `no ${lang} guide is recorded`).toBeGreaterThan(0);
+      const shipping = fs.readFileSync(guide(lang), 'utf-8');
+      expect(PAST_GUIDES[lang], `what ships is listed as retired (${lang})`).not.toContain(
+        shipping,
+      );
+    }
+  });
+
+  it('does not rewrite a guide that is already the current one', async () => {
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+    const before = fs.statSync(guide('ko')).mtimeMs;
+
+    scriptsService.list('studio');
+    expect(fs.statSync(guide('ko')).mtimeMs).toBe(before);
   });
 
   it('does not list a markdown file as something to run', async () => {

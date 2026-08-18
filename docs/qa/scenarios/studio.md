@@ -117,13 +117,16 @@
 | CASE-studio-097 | 목록이 `.md` 도 실어 가이드를 편집기에서 열 수 있다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-098 | 가이드가 이미 쓰던 워크스페이스에도 깔린다(빈 슬롯이 아니어도) | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-099 | 두 가이드 **각각**이 참고처(playwright.dev)·엔진(Firefox)·전역 6개·기본 내보내기를 답한다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
-| CASE-studio-100 | 고쳐 놓은 가이드는 덮지 않는다(다른 언어판은 그래도 깔린다) | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-100 | 고쳐 놓은 가이드는 덮지 않는다 — 옛 판에 한 줄 덧붙인 것도 사람 파일이다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-101 | 가이드는 시드 판정에서 안 세어, 시작 스크립트가 그대로 깔린다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-105 | 목록에 `GUIDE_ko.md` 와 `GUIDE_en.md` 가 **둘 다** 뜬다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-106 | 한국어판은 한글로, 영어판은 한글 없이 쓰여 있다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-107 | 두 가이드가 서로를 가리킨다(첫머리 한 줄) | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-108 | 예전 단일 `GUIDE.md` 는 사람이 고친 것이라도 지우고 두 파일로 바꾼다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-109 | 옛 시드를 쥔 워크스페이스의 `example.ts` 가 지금 있는 가이드 이름을 가리키게 갱신된다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-122 | 앱이 쓴 옛 판 가이드는 새 판으로 바뀐다(두 언어 다) | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-123 | 옛 판 기록에 **지금 판은 들어 있지 않다** — 들어 있으면 목록마다 덮어써 사람의 수정이 남지 못한다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-124 | 이미 지금 판인 가이드는 다시 쓰지 않는다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-102 | `실행` 은 스크립트 확장자와 이름 없는 버퍼에만 열린다(마크다운은 잠긴다) | `studio.browser` | UI | `CodeEditor.test.tsx` |
 
 ## TestSuite: 작업대의 자리 — 파일이 화면을 얼마나 쓰는가
