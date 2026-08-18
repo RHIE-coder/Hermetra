@@ -368,8 +368,8 @@ they would have run with no spec at all.
 - **`hooks/`** — `design-token-guard`, `immunity-rules-guard` (see below).
 - **`immunity/ledger.md`** — `/steward:immunize` writes here; the hooks enforce it.
 - **`checks/`** — the project's drift checks (tokens, layered imports, i18n
-  pairs, coverage, ledger), plus `lib/config.mjs` and `extractors/` that they
-  load, configured by `harness.config.json`. steward reaches them through its
+  pairs, coverage, ledger, seeded docs), plus `lib/config.mjs` and `extractors/`
+  that they load, configured by `harness.config.json`. steward reaches them through its
   `token-guard` binding (`npm run sweep`); the two hooks spawn
   `check-design-tokens.mjs` / `check-ledger-violations.mjs` directly, so a guard
   and a sweep can never disagree. They live under `.claude/` because a hook has
@@ -387,7 +387,9 @@ Two PreToolUse hooks back this up at the tool-call level:
   Tailwind color class not registered in `tailwind.config.ts`. See ledger
   entry `design-token-fabrication`.
 - **`immunity-rules-guard`** — For each ledger entry with a `rule:` regex,
-  blocks any Write/Edit whose content matches.
+  blocks any Write/Edit whose content matches. One of those rules is
+  `real-profile-in-verification-script`: a script that launches the app must
+  pass a throwaway `--user-data-dir`, never the user's own profile.
 
 If a hook blocks you, do **not** rewrite the content to bypass it. Either use
 a valid token / pattern, or update the ledger entry first (via `/immunize`)
@@ -399,6 +401,7 @@ if the rule is genuinely wrong.
 |---|---|
 | Run the whole sweep | `npm run sweep` (exits 1 if any check fails; read the summary table) |
 | Run one check (e.g. tokens) | `npm run sweep:tokens` |
+| Check the shipped guide is refreshable | `npm run sweep:docs` (a retired guide text must be recorded in `services/past-guides.ts` before it stops shipping) |
 | Run full project gate | `npm run check` |
 | Lint the ledger | `npm run lint:ledger` |
 | Check the steward wiring | `node .harness/steward/core/validate.mjs` |

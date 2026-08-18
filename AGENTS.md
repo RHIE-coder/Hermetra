@@ -129,7 +129,7 @@ enforce still applies to you**:
 | Gate run records (append-only) | `docs/qa/runs/` |
 | Agreed vocabulary | `docs/glossary.md` |
 | Per-task work artifacts | `.harness/steward/artifacts/<work>/` — `<work>` comes from `feature:` in the config, not from a branch |
-| Drift checks (tokens, imports, i18n, coverage, ledger) | `.claude/checks/`, configured by `.claude/harness.config.json`. Run them with `npm run sweep` |
+| Drift checks (tokens, imports, i18n, coverage, ledger, seeded docs) | `.claude/checks/`, configured by `.claude/harness.config.json`. Run them with `npm run sweep` |
 | Immunity ledger | `.claude/immunity/ledger.md` |
 | Past sprint specs (frozen) | `.specs/done/` |
 

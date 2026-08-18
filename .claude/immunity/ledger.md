@@ -90,3 +90,26 @@ lesson is judgement-based.
   source: legacy `/sprint` run "electron-e2e-smoke", 2026-05-22; first Green attempt failed
     at tests/e2e/setup/global-setup.ts:11 with ReferenceError. Fix applied
     to global-setup.ts and tests/e2e/fixtures/electron.ts.
+
+- id: real-profile-in-verification-script
+  added: 2026-08-18
+  trigger: Writing a throwaway Playwright/Electron script to look at the app —
+    "let me open the workbench and check the guide renders".
+  mistake: Launched the built app with the user's real Electron profile
+    (`--user-data-dir=~/Library/Application Support/hermetra`) instead of a
+    temporary one. The app then wrote into their actual workspace: it seeded the
+    guide of that moment into `scripts/studio/`, and because the guide was only
+    written when absent, a version that was correct for ten minutes stayed on
+    their disk after the code moved on. The user found it and reported the app
+    had lied to them. `ui-shot.mjs` and `surface-verify.mjs` both default to a
+    temp profile for exactly this reason; a hand-written script skipped it.
+  correct: Verification scripts launch with a throwaway profile —
+    `launchHermetra()` from `tests/e2e/fixtures/electron.ts`, or an explicit
+    `fs.mkdtempSync(path.join(os.tmpdir(), ...))` passed as `--user-data-dir`.
+    Pointing at the real profile is a deliberate act (repairing a file that is
+    already wrong), never the way to take a look — and when it is deliberate,
+    say so to the user before doing it.
+  rule: user-data-dir=[^`'"\n]*(?:Application Support/hermetra|\.hermetra)
+  source: Workbench guide incident, 2026-08-18 — feedback
+    `20260818-164608-studio-browser`, gate run
+    `docs/qa/runs/2026-08-18-workbench-guide-refresh.md`.

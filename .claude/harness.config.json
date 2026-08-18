@@ -14,6 +14,12 @@
     "ledger-violations": {
       "enabled": true
     },
+    "seeded-docs": {
+      "enabled": true,
+      "source": "src/main/services/scripts.ts",
+      "record": "src/main/services/past-guides.ts",
+      "docs": ["SEED_GUIDE_KO", "SEED_GUIDE_EN"]
+    },
     "design-tokens": {
       "enabled": true,
       "extractor": "tailwind",

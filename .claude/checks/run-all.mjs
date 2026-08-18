@@ -21,6 +21,7 @@ const REGISTRY = [
   { name: 'imports', cfgKey: 'layered-imports', script: 'check-layered-imports.mjs' },
   { name: 'i18n', cfgKey: 'i18n-pairs', script: 'check-i18n-pairs.mjs' },
   { name: 'ledger', cfgKey: 'ledger-violations', script: 'check-ledger-violations.mjs' },
+  { name: 'docs', cfgKey: 'seeded-docs', script: 'check-seeded-docs.mjs' },
   { name: 'coverage', cfgKey: 'coverage', script: 'check-coverage.mjs' },
 ];
 

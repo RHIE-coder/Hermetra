@@ -28,6 +28,7 @@
     "sweep:i18n": "node .claude/checks/check-i18n-pairs.mjs",
     "sweep:coverage": "node .claude/checks/check-coverage.mjs",
     "sweep:ledger": "node .claude/checks/check-ledger-violations.mjs",
+    "sweep:docs": "node .claude/checks/check-seeded-docs.mjs",
     "lint:ledger": "node .claude/checks/lint-ledger.mjs"
   },
   "license": "AGPL-3.0-only",
