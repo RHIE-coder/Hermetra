@@ -58,7 +58,7 @@ function detectLanguage(path: string | undefined): string {
 
 /**
  * What Run will accept. The tree lists more than it runs — the workbench seeds a
- * `GUIDE.md` next to the scripts — and handing prose to the runner prints a
+ * guide in each language next to the scripts — and handing prose to the runner prints a
  * syntax error in a file the person did not write. An unnamed buffer counts:
  * it becomes `untitled.ts` on the way out.
  */

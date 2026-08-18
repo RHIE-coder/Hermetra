@@ -40,9 +40,7 @@
 | Case | 무엇 | 덮는 노드 | 계층 | 구현 |
 |---|---|---|---|---|
 | CASE-studio-020 | 스니펫이 그대로 돌고 `page`·`log` 가 닿는다 | `studio.browser` | 단위 | `studio-runner.test.ts` |
-| CASE-studio-021 | `extract` 가 `(page, ctx)` 로 불린다 | `studio.browser` | 단위 | `studio-runner.test.ts` |
-| CASE-studio-022 | `transform` 이 `extract` 결과에 이어 붙는다 | `studio.browser` | 단위 | `studio-runner.test.ts` |
-| CASE-studio-023 | `extract` 없는 `transform` 은 부르지 않는다 | `studio.browser` | 단위 | `studio-runner.test.ts` |
+| CASE-studio-021 | `extract`·`transform` 이라는 이름은 **아무 힘이 없다** — 부르지 않고, 파일만 돈다 | `studio.browser` | 단위 | `studio-runner.test.ts` |
 | CASE-studio-024 | `default` export 가 `(page, ctx)` 로 불린다 | `studio.browser` | 단위 | `studio-runner.test.ts` |
 | CASE-studio-025 | **타입 주석이 있는 파일이 그대로 돈다** | `studio.browser` | 단위 | `studio-runner.test.ts` |
 | CASE-studio-026 | **상대 import 가 스크립트 옆을 가리킨다** | `studio.browser` | 단위 | `studio-runner.test.ts` |
@@ -116,11 +114,16 @@
 | CASE-studio-096 | 시드를 실제 실행기로 돌리면, 손 안 댄 것과 거친 것이 나란히 찍혀 import 해 온 함수가 한 일이 보인다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-103 | 시드와 `lib/rows.ts` 가 **함께** 갱신된다(옛 짝을 쥔 워크스페이스) | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-104 | 짝 중 하나라도 사람이 고쳤으면 **둘 다** 안 건드린다(가이드는 그래도 깔린다) | `studio.browser` | API | `tests/api/scripts.test.ts` |
-| CASE-studio-097 | 목록이 `.md` 도 실어 `GUIDE.md` 를 편집기에서 열 수 있다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
-| CASE-studio-098 | `GUIDE.md` 가 이미 쓰던 워크스페이스에도 깔린다(빈 슬롯이 아니어도) | `studio.browser` | API | `tests/api/scripts.test.ts` |
-| CASE-studio-099 | 가이드가 참고처(playwright.dev)·엔진(Firefox)·전역 6개·extract/transform 을 답한다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
-| CASE-studio-100 | 고쳐 놓은 가이드는 덮지 않는다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
-| CASE-studio-101 | `GUIDE.md` 는 시드 판정에서 안 세어, 시작 스크립트가 그대로 깔린다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-097 | 목록이 `.md` 도 실어 가이드를 편집기에서 열 수 있다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-098 | 가이드가 이미 쓰던 워크스페이스에도 깔린다(빈 슬롯이 아니어도) | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-099 | 두 가이드 **각각**이 참고처(playwright.dev)·엔진(Firefox)·전역 6개·기본 내보내기를 답한다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-100 | 고쳐 놓은 가이드는 덮지 않는다(다른 언어판은 그래도 깔린다) | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-101 | 가이드는 시드 판정에서 안 세어, 시작 스크립트가 그대로 깔린다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-105 | 목록에 `GUIDE_ko.md` 와 `GUIDE_en.md` 가 **둘 다** 뜬다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-106 | 한국어판은 한글로, 영어판은 한글 없이 쓰여 있다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-107 | 두 가이드가 서로를 가리킨다(첫머리 한 줄) | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-108 | 예전 단일 `GUIDE.md` 는 사람이 고친 것이라도 지우고 두 파일로 바꾼다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
+| CASE-studio-109 | 옛 시드를 쥔 워크스페이스의 `example.ts` 가 지금 있는 가이드 이름을 가리키게 갱신된다 | `studio.browser` | API | `tests/api/scripts.test.ts` |
 | CASE-studio-102 | `실행` 은 스크립트 확장자와 이름 없는 버퍼에만 열린다(마크다운은 잠긴다) | `studio.browser` | UI | `CodeEditor.test.tsx` |
 
 ## TestSuite: 작업대의 자리 — 파일이 화면을 얼마나 쓰는가

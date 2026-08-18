@@ -5,13 +5,14 @@ import type { Components } from 'react-markdown';
 /**
  * A workspace `.md` file, read as a document.
  *
- * The workbench ships `GUIDE.md` beside the scripts and the file list opens it
- * in the same editor as everything else — so the one file on that list written
- * to be *read* arrives as `|---|---|`. Prose is not read that way.
+ * The workbench ships its guide beside the scripts — `GUIDE_ko.md` and
+ * `GUIDE_en.md` — and the file list opens them in the same editor as everything
+ * else, so the files on that list written to be *read* arrive as `|---|---|`.
+ * Prose is not read that way.
  *
  * No typography plugin: every element is dressed here out of the design tokens,
  * so the document wears this app's palette in both themes instead of a
- * plugin's own. GFM is on for one reason — `GUIDE.md` is mostly a table.
+ * plugin's own. GFM is on for one reason — the guide is mostly a table.
  */
 
 // Links leave the app. `setWindowOpenHandler` in main answers `target="_blank"`

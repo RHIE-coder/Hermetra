@@ -235,10 +235,18 @@ describe('scripts service — the slot root is a module root', () => {
  *
  * It is seeded next to the scripts and listed in the tree rather than linked out,
  * because the half a person cannot look up anywhere — the injected globals, the
- * Firefox engine under Playwright, `export extract` — is exactly the half that is
- * this app's own. A link to playwright.dev answers the other half.
+ * Firefox engine under Playwright, what Run does with a default export — is
+ * exactly the half that is this app's own. A link to playwright.dev answers the
+ * other half.
+ *
+ * It ships in **both** of the app's languages (2026-08-18). The app is bilingual
+ * everywhere else — `messages.ts` fails to compile if a key is missing either
+ * side — and the one document explaining how to write a script was English only.
+ * Both files are laid down for everyone: the person is the one who knows which
+ * they read, and a guide that appears only in the language the UI happens to be
+ * set to is a guide that vanishes when someone flips the switch.
  */
-describe('scripts service — the guide sits with the scripts', () => {
+describe('scripts service — the guide sits with the scripts, in both languages', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-scripts-'));
   });
@@ -248,12 +256,13 @@ describe('scripts service — the guide sits with the scripts', () => {
   });
 
   const slot = () => path.join(tmpDir, 'scripts', 'studio');
-  const guide = () => path.join(slot(), 'GUIDE.md');
+  const guide = (lang: 'ko' | 'en') => path.join(slot(), `GUIDE_${lang}.md`);
+  const GUIDES = ['GUIDE_ko.md', 'GUIDE_en.md'] as const;
 
-  it('lists markdown, so the guide can be opened from the tree', async () => {
+  it('lists both guides, so the tree opens the one you read', async () => {
     const { scriptsService } = await importFresh();
-    const items = scriptsService.list('studio');
-    expect(items.map((i) => i.path)).toContain('GUIDE.md');
+    const items = scriptsService.list('studio').map((i) => i.path);
+    for (const name of GUIDES) expect(items).toContain(name);
   });
 
   it('reaches a workspace that already existed, not only a fresh one', async () => {
@@ -265,42 +274,91 @@ describe('scripts service — the guide sits with the scripts', () => {
     const { scriptsService } = await importFresh();
     scriptsService.list('studio');
 
-    expect(fs.existsSync(guide())).toBe(true);
+    expect(fs.existsSync(guide('ko'))).toBe(true);
+    expect(fs.existsSync(guide('en'))).toBe(true);
   });
 
-  it('answers the questions it exists to answer', async () => {
+  it('answers the questions it exists to answer — in either language', async () => {
     const { scriptsService } = await importFresh();
-    const { source } = scriptsService.read('studio', 'GUIDE.md');
 
-    // Where to look for the 90% this app did not invent — and the engine, because
-    // Playwright's Chromium-only pages are a dead end here.
-    expect(source).toMatch(/playwright\.dev/);
-    expect(source).toMatch(/[Ff]irefox/);
-    // The globals, which are documented nowhere else a person would think to look.
-    for (const g of ['page', 'context', 'browser', 'ctx', 'log', 'env']) {
-      // In backticks, either bare or as a call — `log(...)` counts.
-      expect(source, `the guide never mentions \`${g}\``).toMatch(new RegExp('`' + g + '[(`]'));
+    for (const name of GUIDES) {
+      const { source } = scriptsService.read('studio', name);
+
+      // Where to look for the 90% this app did not invent — and the engine, because
+      // Playwright's Chromium-only pages are a dead end here.
+      expect(source, `${name} names no documentation to read`).toMatch(/playwright\.dev/);
+      expect(source, `${name} never says the engine is Firefox`).toMatch(/[Ff]irefox/);
+      // The globals, which are documented nowhere else a person would think to look.
+      for (const g of ['page', 'context', 'browser', 'ctx', 'log', 'env']) {
+        // In backticks, either bare or as a call — `log(...)` counts.
+        expect(source, `${name} never mentions \`${g}\``).toMatch(new RegExp('`' + g + '[(`]'));
+      }
+      // What Run calls on the author's behalf — the only thing it calls, since
+      // `extract`/`transform` left the runner on 2026-08-18.
+      expect(source, `${name} never says what a default export does`).toMatch(
+        /export default/,
+      );
     }
-    // The two names that prompted all of this, and the honest status of both.
-    expect(source).toMatch(/extract/);
-    expect(source).toMatch(/transform/);
+  });
+
+  it('writes the Korean one in Korean and the English one in English', async () => {
+    // Two files whose only difference is the name would be worse than one file:
+    // the tree would show a choice that is not a choice.
+    const { scriptsService } = await importFresh();
+    const hangul = /[가-힣]/;
+
+    expect(scriptsService.read('studio', 'GUIDE_ko.md').source).toMatch(hangul);
+    expect(scriptsService.read('studio', 'GUIDE_en.md').source).not.toMatch(hangul);
+  });
+
+  it('has each guide point at the other, so two of them is not a puzzle', async () => {
+    const { scriptsService } = await importFresh();
+    expect(scriptsService.read('studio', 'GUIDE_ko.md').source).toContain('GUIDE_en.md');
+    expect(scriptsService.read('studio', 'GUIDE_en.md').source).toContain('GUIDE_ko.md');
   });
 
   it('leaves a guide the person has edited alone', async () => {
     const { scriptsService } = await importFresh();
     scriptsService.list('studio');
     const mine = '# my notes\n';
-    fs.writeFileSync(guide(), mine, 'utf-8');
+    fs.writeFileSync(guide('ko'), mine, 'utf-8');
 
     scriptsService.list('studio');
-    expect(fs.readFileSync(guide(), 'utf-8')).toBe(mine);
+    expect(fs.readFileSync(guide('ko'), 'utf-8')).toBe(mine);
+    // The other one is a separate file, so a note in one does not stop the other
+    // from being replaced when it is missing.
+    expect(fs.existsSync(guide('en'))).toBe(true);
+  });
+
+  it('takes away the single-language GUIDE.md it used to ship', async () => {
+    // The app shipped one English `GUIDE.md` until 2026-08-18. Leaving it beside
+    // the pair puts three guides in the tree and two of them are the same text,
+    // so it goes — **even if the person edited it**, which is the user's call
+    // (2026-08-18) and the one thing here that can lose someone's writing.
+    fs.mkdirSync(slot(), { recursive: true });
+    fs.writeFileSync(path.join(slot(), 'GUIDE.md'), '# my own notes\n', 'utf-8');
+
+    const { scriptsService } = await importFresh();
+    const items = scriptsService.list('studio').map((i) => i.path);
+
+    expect(fs.existsSync(path.join(slot(), 'GUIDE.md'))).toBe(false);
+    expect(items).not.toContain('GUIDE.md');
+    for (const name of GUIDES) expect(items).toContain(name);
+  });
+
+  it('still seeds the starter script into a slot holding only the guides', async () => {
+    // The guides `dir()` just laid down are the app talking to itself. Counting
+    // them makes every slot look occupied, and no starter file ever lands.
+    const { scriptsService } = await importFresh();
+    const items = scriptsService.list('studio').map((i) => i.path);
+    expect(items).toContain('example.ts');
   });
 
   it('does not list a markdown file as something to run', async () => {
     // Listing it is what makes it openable; it is still not a script. The Run
     // button is disabled for it in the editor (`CodeEditor.test.tsx`).
     const { scriptsService } = await importFresh();
-    const [guideEntry] = scriptsService.list('studio').filter((i) => i.path === 'GUIDE.md');
+    const [guideEntry] = scriptsService.list('studio').filter((i) => i.path === 'GUIDE_ko.md');
     expect(guideEntry!.type).toBe('file');
   });
 });
@@ -441,6 +499,69 @@ console.log(headings.length, 'headings', headings);
 //   export function transform(raw) { ... }
 `;
 
+  /** The `lib/rows.ts` that ships today — the seed is only upgraded as a pair. */
+  const CURRENT_LIB = `// Your own module — nothing here is this app's invention. Whatever you would
+// rather not write twice goes in a file like this, and your scripts import it.
+
+export interface Row {
+  text: string;
+}
+
+/**
+ * Text pulled off a page comes wrapped across lines, padded, and repeated.
+ * Doing this once inline is fine. Doing it in every script is the reason this
+ * file exists.
+ */
+export function clean(rows: Row[]): Row[] {
+  const seen = new Set<string>();
+  const out: Row[] = [];
+  for (const row of rows) {
+    const text = row.text.replace(/\\s+/g, ' ').trim();
+    if (text === '' || seen.has(text)) continue;
+    seen.add(text);
+    out.push({ ...row, text });
+  }
+  return out;
+}
+`;
+
+  /**
+   * The seed as it shipped 2026-08-14..18 — a script that imports, and correct
+   * about the runtime, but pointing at a guide called `GUIDE.md`. That file is
+   * gone (one guide per language since 2026-08-18), so the first file a person
+   * opens sends them to something the app deletes on the next listing.
+   */
+  const SEED_POINTING_AT_ONE_GUIDE = `// Browser workbench. This file is a script: it runs top to bottom, as written,
+// in a real Node runtime. TypeScript, imports of your other scripts, and any
+// package you install under scripts/ (npm i cheerio) all work.
+//
+// Already in scope: page (the active tab) · context · browser · ctx.url (the
+// address bar) · env. console.log lands in the panel below, as it happens.
+// GUIDE.md, next to this file, has the rest — including why the browser being
+// Firefox matters when you read the Playwright docs.
+
+// ── Using one of your own files ─────────────────────────────────────────────
+// \`clean\` and \`Row\` are not this app's. They are in lib/rows.ts, one folder
+// down; open it, it is an ordinary module. The '.ts' is not optional — Node
+// loads these as ES modules, and an ES module asks for a file by its real name.
+// An installed package is a bare name instead: import { load } from 'cheerio';
+import { clean, type Row } from './lib/rows.ts';
+
+await page.goto(ctx.url ?? 'https://example.com');
+console.log('title:', await page.title());
+
+/** Everything matching \`selector\`, as rows of text. */
+const rowsOf = (selector: string): Promise<Row[]> =>
+  page.$$eval(selector, (els: Element[]) => els.map((el) => ({ text: el.textContent ?? '' })));
+
+const raw: Row[] = await rowsOf('h1, p, a');
+
+// Both, so you can see what the imported function actually did: wrapped text
+// collapsed onto one line, blanks dropped, repeats dropped.
+console.log('raw    ', raw);
+console.log('cleaned', clean(raw));
+`;
+
   const plant = (source: string) => {
     fs.mkdirSync(slot(), { recursive: true });
     fs.writeFileSync(seedFile(), source, 'utf-8');
@@ -461,6 +582,20 @@ console.log(headings.length, 'headings', headings);
 
     expect(read(seedFile())).toMatch(/^await page\.goto/m);
     expect(read(seedFile())).not.toMatch(/^export async function extract/m);
+  });
+
+  it('sends a carried-over seed to the guides that exist now', async () => {
+    // The pointer is the whole reason this file has a comment header. A stale
+    // one is worse than none: it names a file, so the person goes looking.
+    plant(SEED_POINTING_AT_ONE_GUIDE);
+    fs.mkdirSync(path.join(slot(), 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(slot(), 'lib', 'rows.ts'), CURRENT_LIB, 'utf-8');
+
+    const { scriptsService } = await importFresh();
+    scriptsService.list('studio');
+
+    expect(read(seedFile())).toContain('GUIDE_ko.md');
+    expect(read(seedFile())).not.toMatch(/\bGUIDE\.md\b/);
   });
 
   it('leaves a seed the person has touched exactly as it is', async () => {
@@ -547,7 +682,8 @@ export function clean(row: Row): Row {
 
     expect(read(path.join(slot(), 'lib', 'rows.ts'))).toBe(mine);
     expect(read(seedFile())).toBe(SEED_WITHOUT_IMPORT);
-    expect(fs.existsSync(path.join(slot(), 'GUIDE.md'))).toBe(true);
+    expect(fs.existsSync(path.join(slot(), 'GUIDE_ko.md'))).toBe(true);
+    expect(fs.existsSync(path.join(slot(), 'GUIDE_en.md'))).toBe(true);
   });
 
   it('does not rewrite the current seed on every listing', async () => {
@@ -603,13 +739,14 @@ describe('scripts service — the slot was called `pipeline` until 2026-08-12', 
     // would look empty, get a starter script, and the person's own files would
     // arrive next to a file they never wrote.
     //
-    // GUIDE.md is not that file: it is laid down in every slot, carried-over or
-    // not, and is what this test would otherwise mistake for a stray seed.
+    // The guides are not that file: they are laid down in every slot,
+    // carried-over or not, and are what this test would otherwise mistake for a
+    // stray seed.
     legacy('amazon.ts', '// mine');
     const { scriptsService } = await importFresh();
     const files = scriptsService
       .list('studio')
-      .filter((i) => i.type === 'file' && i.path !== 'GUIDE.md');
+      .filter((i) => i.type === 'file' && !/^GUIDE_(ko|en)\.md$/.test(i.path));
     expect(files.map((i) => i.path)).toEqual(['amazon.ts']);
   });
 

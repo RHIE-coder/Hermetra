@@ -451,8 +451,8 @@ describe('CodeEditor — drag & drop (scripts-tree-dnd)', () => {
 });
 
 /**
- * The tree lists more than it runs. The workbench seeds a `GUIDE.md` beside the
- * scripts, so the file list is now the place to *open* things — and pressing Run
+ * The tree lists more than it runs. The workbench seeds a guide per language
+ * beside the scripts, so the file list is the place to *open* things — and pressing Run
  * on prose would hand markdown to the runner and print a syntax error the person
  * did not write.
  */
@@ -465,7 +465,7 @@ describe('CodeEditor — Run is for scripts, not for everything the tree lists',
   });
 
   it('does not offer to run a markdown file', () => {
-    renderEditor({ ready: true, current: { path: 'GUIDE.md', source: '# guide' } });
+    renderEditor({ ready: true, current: { path: 'GUIDE_ko.md', source: '# guide' } });
     expect(runButton()).toBeDisabled();
   });
 
@@ -502,13 +502,13 @@ describe('CodeEditor — a markdown file can be read as a document', () => {
     expect(previewToggle()).toBeNull();
     unmount();
 
-    renderEditor({ current: { path: 'GUIDE.md', source: GUIDE } });
+    renderEditor({ current: { path: 'GUIDE_en.md', source: GUIDE } });
     expect(previewToggle()).not.toBeNull();
   });
 
   it('renders headings and GFM tables instead of the source', async () => {
     const user = userEvent.setup();
-    renderEditor({ current: { path: 'GUIDE.md', source: GUIDE } });
+    renderEditor({ current: { path: 'GUIDE_en.md', source: GUIDE } });
 
     await user.click(previewToggle()!);
 
@@ -526,7 +526,7 @@ describe('CodeEditor — a markdown file can be read as a document', () => {
       // No language on the fence: react-markdown stopped marking inline vs block
       // with a prop, and an unlabelled fence carries no class to test either, so
       // this is the case that catches a `code` renderer dressing both the same.
-      current: { path: 'GUIDE.md', source: '```\nawait page.goto("/")\n```\n' },
+      current: { path: 'GUIDE_en.md', source: '```\nawait page.goto("/")\n```\n' },
     });
 
     await user.click(previewToggle()!);
@@ -539,7 +539,7 @@ describe('CodeEditor — a markdown file can be read as a document', () => {
 
   it('goes back to the source on a second press', async () => {
     const user = userEvent.setup();
-    renderEditor({ current: { path: 'GUIDE.md', source: GUIDE } });
+    renderEditor({ current: { path: 'GUIDE_en.md', source: GUIDE } });
 
     await user.click(previewToggle()!);
     expect(screen.queryByTestId('editor-preview')).toBeInTheDocument();
@@ -551,7 +551,7 @@ describe('CodeEditor — a markdown file can be read as a document', () => {
   it('links leave the app rather than navigate the renderer', async () => {
     const user = userEvent.setup();
     renderEditor({
-      current: { path: 'GUIDE.md', source: '[docs](https://playwright.dev/docs/api/class-page)' },
+      current: { path: 'GUIDE_en.md', source: '[docs](https://playwright.dev/docs/api/class-page)' },
     });
 
     await user.click(previewToggle()!);

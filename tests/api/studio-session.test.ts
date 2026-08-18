@@ -91,7 +91,7 @@ describe('pipeline session on the mock browser', () => {
     workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermetra-seed-'));
     try {
       const { scriptsService } = await import('@main/services/scripts');
-      // The listing is wider than the runnable set — `GUIDE.md` sits in it too —
+      // The listing is wider than the runnable set — the guides sit in it too —
       // so "the first file" is not the same thing as "the script".
       const [seed] = scriptsService
         .list('studio')

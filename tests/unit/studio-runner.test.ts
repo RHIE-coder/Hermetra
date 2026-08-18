@@ -76,35 +76,26 @@ describe('runModule — the shapes a file can take', () => {
     expect(lines).toContainEqual({ level: 'log', text: 'hi' });
   });
 
-  it('calls extract with the page and the address bar', async () => {
+  it('does nothing special with functions named `extract` or `transform`', async () => {
+    // Two names the app invented for the ingestion and processing screens, and
+    // then called from four lines of the runner for a year in which those
+    // screens stayed 13-line placeholders. Removed 2026-08-18: a file here runs
+    // top to bottom, and the one thing Run calls on your behalf is a default
+    // export. Anything else named in a file is just a function you exported.
     const page = fakePage();
     const out = await run(
-      'export async function extract(page, ctx) { return [{ at: ctx.url, url: page.url() }]; }',
-      { ctx: { url: 'https://naver.com' } },
+      `
+      export function extract() { throw new Error('must not be called'); }
+      export function transform() { throw new Error('must not be called'); }
+      log('the file itself ran');
+    `,
+      { ctx: { url: 'https://x.test' } },
       page,
     );
 
     expect(out.ok).toBe(true);
-    expect(lines.at(-1)!.text).toContain('"at":"https://naver.com"');
-  });
-
-  it('chains transform onto what extract returned', async () => {
-    const out = await run(`
-      export async function extract() { return [1, 2, 3]; }
-      export function transform(raw) { return raw.map((n) => n * 10); }
-    `);
-
-    expect(out.ok).toBe(true);
-    expect(lines.at(-1)!.text).toContain('[10,20,30]');
-  });
-
-  it('leaves transform alone when there is no extract to feed it', async () => {
-    // Called with undefined it would crash a script whose author never wrote
-    // that call. A stage script with only a transform simply has no input here.
-    const out = await run('export function transform(raw) { return raw.length; }');
-
-    expect(out.ok).toBe(true);
     expect(out.error).toBe('');
+    expect(lines).toEqual([{ level: 'log', text: 'the file itself ran' }]);
   });
 
   it('calls a default export with the page and ctx', async () => {
@@ -167,7 +158,7 @@ describe('runModule — it is really TypeScript, and really a module', () => {
   it('runs a file with type annotations', async () => {
     const out = await run(`
       interface Row { title: string }
-      export async function extract(page: { url(): string }): Promise<Row[]> {
+      export default async function (page: { url(): string }): Promise<Row[]> {
         return [{ title: page.url() }];
       }
     `);
@@ -186,7 +177,7 @@ describe('runModule — it is really TypeScript, and really a module', () => {
 
     const out = await run(`
       import { who } from './lib/login.ts';
-      export function extract() { return who('rhie'); }
+      export default function () { return who('rhie'); }
     `);
 
     expect(out.error).toBe('');
@@ -194,7 +185,7 @@ describe('runModule — it is really TypeScript, and really a module', () => {
   });
 
   it('reports a syntax error as a failed run and stays alive', async () => {
-    const out = await run('export function extract( {');
+    const out = await run('export default function ( {');
 
     expect(out.ok).toBe(false);
     expect(out.error).not.toBe('');
@@ -204,7 +195,7 @@ describe('runModule — it is really TypeScript, and really a module', () => {
   it('keeps the runner\'s own frames out of the trace', async () => {
     // What follows the user's own frames is this file's plumbing. Printing it
     // makes a two-line mistake look like a crash in the app.
-    const out = await run("export function extract() { throw new Error('nope'); }");
+    const out = await run("export default function () { throw new Error('nope'); }");
 
     expect(out.error).toContain('step.ts');
     expect(out.error).not.toContain('runner.ts');
@@ -214,7 +205,7 @@ describe('runModule — it is really TypeScript, and really a module', () => {
   it('names the script, not the temp module, when something throws', async () => {
     // The file a person edits is `step.ts`. A trace pointing at a hidden file
     // they never wrote is a trace they cannot act on.
-    const out = await run("export function extract() { throw new Error('nope'); }");
+    const out = await run("export default function () { throw new Error('nope'); }");
 
     expect(out.ok).toBe(false);
     expect(out.error).toContain('nope');
@@ -229,7 +220,7 @@ describe('runModule — what it leaves behind', () => {
   });
 
   it('removes the temp module after a bad one too', async () => {
-    await run('export function extract( {');
+    await run('export default function ( {');
     expect(leftovers()).toEqual([]);
   });
 
@@ -242,14 +233,14 @@ describe('runModule — what it leaves behind', () => {
 
 describe('runModule — the returned value is the thing being checked', () => {
   it('prints rows with their count', async () => {
-    const out = await run('export function extract() { return [{ a: 1 }, { a: 2 }]; }');
+    const out = await run('export default function () { return [{ a: 1 }, { a: 2 }]; }');
 
     expect(out.ok).toBe(true);
     expect(lines.at(-1)!.text).toMatch(/2 rows/);
   });
 
   it('clips a huge value instead of burying the log', async () => {
-    const out = await run("export function extract() { return 'x'.repeat(5000); }");
+    const out = await run("export default function () { return 'x'.repeat(5000); }");
 
     expect(out.ok).toBe(true);
     expect(lines.at(-1)!.text.length).toBeLessThan(2200);

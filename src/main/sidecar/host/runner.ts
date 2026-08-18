@@ -189,17 +189,12 @@ export async function runModule(req: RunRequest, deps: RunDeps): Promise<RunOutc
     const call = (fn: unknown, ...args: unknown[]) =>
       typeof fn === 'function' ? (fn as (...a: unknown[]) => unknown)(...args) : undefined;
 
-    if (typeof mod.extract === 'function') {
-      out = await call(mod.extract, deps.page, req.ctx);
-      // `transform` only runs behind `extract`: on its own it has no input, and
-      // calling it with undefined would turn a fine script into a crash its
-      // author never wrote.
-      if (typeof mod.transform === 'function') out = await call(mod.transform, out);
-    } else if (typeof mod.default === 'function') {
-      out = await call(mod.default, deps.page, req.ctx);
-    }
-    // Neither: a file of top-level statements already ran on import, which is
-    // the snippet shape.
+    // A default export is called for you. It is the one shape here the app did
+    // not invent — a module whose whole point is one function is how JavaScript
+    // has always said that — and it is what gives a script a return value to
+    // show. Anything else: a file of top-level statements already ran on
+    // import, which is the snippet shape.
+    if (typeof mod.default === 'function') out = await call(mod.default, deps.page, req.ctx);
 
     // What a script returned is the thing being checked, so it goes to the panel
     // rather than being thrown away with the verdict.

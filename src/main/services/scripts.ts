@@ -7,11 +7,11 @@ import { workspaceManager } from './workspaceManager';
 type Slot = 'web' | 'mobile' | 'studio';
 
 /**
- * What the tree shows. Wider than "what runs" on purpose: `GUIDE.md` is seeded
- * into this folder, and a guide nobody can open is not a guide. The editor
- * already highlights markdown; only this filter was hiding it. The Run button
- * is what draws the line between openable and runnable — see `RUNNABLE_EXT` in
- * the editor.
+ * What the tree shows. Wider than "what runs" on purpose: the guides
+ * (`GUIDE_ko.md`, `GUIDE_en.md`) are seeded into this folder, and a guide nobody
+ * can open is not a guide. The editor already highlights markdown; only this
+ * filter was hiding it. The Run button is what draws the line between openable
+ * and runnable — see `RUNNABLE_EXT` in the editor.
  */
 const LISTED_EXT = /\.(ts|js|tsx|jsx|md)$/i;
 
@@ -54,10 +54,11 @@ log('login tapped');
  * is this app's invention — the runner imports the file with a real Node
  * runtime, so TypeScript, `import` and installed packages are simply available.
  *
- * A stage script (`export extract` / `export transform`) still runs, and the
- * ingestion and processing screens will reference scripts that way. But leading
- * with that shape made a workbench for trying things look like a framework to
- * fill in, which is the opposite of what this screen is.
+ * Leading with an export contract made a workbench for trying things look like a
+ * framework to fill in, which is the opposite of what this screen is. The
+ * `extract`/`transform` pair the seed once advertised is gone from the runner
+ * too (2026-08-18) — a file runs top to bottom, and a default export is the only
+ * thing called on the author's behalf.
  *
  * **It imports, and the file it imports is seeded with it.** Saying "imports of
  * your other scripts work" in a comment leaves the two things that actually bite
@@ -72,8 +73,8 @@ const SEED_STUDIO = `// Browser workbench. This file is a script: it runs top to
 //
 // Already in scope: page (the active tab) · context · browser · ctx.url (the
 // address bar) · env. console.log lands in the panel below, as it happens.
-// GUIDE.md, next to this file, has the rest — including why the browser being
-// Firefox matters when you read the Playwright docs.
+// GUIDE_ko.md / GUIDE_en.md, next to this file, have the rest — including why
+// the browser being Firefox matters when you read the Playwright docs.
 
 // ── Using one of your own files ─────────────────────────────────────────────
 // \`clean\` and \`Row\` are not this app's. They are in lib/rows.ts, one folder
@@ -163,6 +164,32 @@ export interface Row {
 
 export function clean(row: Row): Row {
   return { ...row, title: row.title.trim() };
+}
+`,
+  // 2026-08-14, and still what ships: listed so a pair holding it can have its
+  // script upgraded (`replaceUntouchedSeed` stops when the companion is not ours).
+  `// Your own module — nothing here is this app's invention. Whatever you would
+// rather not write twice goes in a file like this, and your scripts import it.
+
+export interface Row {
+  text: string;
+}
+
+/**
+ * Text pulled off a page comes wrapped across lines, padded, and repeated.
+ * Doing this once inline is fine. Doing it in every script is the reason this
+ * file exists.
+ */
+export function clean(rows: Row[]): Row[] {
+  const seen = new Set<string>();
+  const out: Row[] = [];
+  for (const row of rows) {
+    const text = row.text.replace(/\\s+/g, ' ').trim();
+    if (text === '' || seen.has(text)) continue;
+    seen.add(text);
+    out.push({ ...row, text });
+  }
+  return out;
 }
 `,
 ];
@@ -279,6 +306,40 @@ console.log(headings.length, 'headings', headings.map(clean));
 //   export async function extract(page, ctx) { ... }
 //   export function transform(raw) { ... }
 `,
+    // 2026-08-14..18: right about everything except where the guide is. It sent
+    // the reader to `GUIDE.md`, and 2026-08-18 split that file into one per
+    // language, so the pointer in every workspace opened in those four days
+    // names a file the app now deletes.
+    `// Browser workbench. This file is a script: it runs top to bottom, as written,
+// in a real Node runtime. TypeScript, imports of your other scripts, and any
+// package you install under scripts/ (npm i cheerio) all work.
+//
+// Already in scope: page (the active tab) · context · browser · ctx.url (the
+// address bar) · env. console.log lands in the panel below, as it happens.
+// GUIDE.md, next to this file, has the rest — including why the browser being
+// Firefox matters when you read the Playwright docs.
+
+// ── Using one of your own files ─────────────────────────────────────────────
+// \`clean\` and \`Row\` are not this app's. They are in lib/rows.ts, one folder
+// down; open it, it is an ordinary module. The '.ts' is not optional — Node
+// loads these as ES modules, and an ES module asks for a file by its real name.
+// An installed package is a bare name instead: import { load } from 'cheerio';
+import { clean, type Row } from './lib/rows.ts';
+
+await page.goto(ctx.url ?? 'https://example.com');
+console.log('title:', await page.title());
+
+/** Everything matching \`selector\`, as rows of text. */
+const rowsOf = (selector: string): Promise<Row[]> =>
+  page.$$eval(selector, (els: Element[]) => els.map((el) => ({ text: el.textContent ?? '' })));
+
+const raw: Row[] = await rowsOf('h1, p, a');
+
+// Both, so you can see what the imported function actually did: wrapped text
+// collapsed onto one line, blanks dropped, repeats dropped.
+console.log('raw    ', raw);
+console.log('cleaned', clean(raw));
+`,
   ]);
 
 /**
@@ -307,7 +368,7 @@ const SEED_PACKAGE_JSON = `{
 const SEED_ENV_DTS = STUDIO_AMBIENT_DTS;
 
 /**
- * The guide, seeded next to the scripts.
+ * The guide, seeded next to the scripts — one file per language.
  *
  * It exists because of a question nobody could answer from inside the app:
  * "what syntax do I even look up?" (2026-08-14). Two thirds of the answer is
@@ -320,10 +381,23 @@ const SEED_ENV_DTS = STUDIO_AMBIENT_DTS;
  * It ships as a file in the workspace rather than a panel in the UI so that it
  * opens in the same editor as the scripts, works with no network, and can be
  * edited or deleted like anything else in that folder.
+ *
+ * **Both languages, always** (2026-08-18). Every string the UI shows exists in
+ * `en` and `ko` — `MessageKey` will not compile otherwise — and the one document
+ * that explains how to write a script was English only. Seeding just the one
+ * matching the current UI language would make a guide that disappears when
+ * somebody flips the switch, and the person reading is the one who knows which
+ * language they want. So both are laid down and the tree shows the choice.
  */
-const SEED_GUIDE = `# Browser workbench — what to read, and what is this app's own
+const GUIDE_FILES = ['GUIDE_ko.md', 'GUIDE_en.md'] as const;
+
+/** The single English guide shipped from 2026-08-14 to 2026-08-18. */
+const LEGACY_GUIDE = 'GUIDE.md';
+
+const SEED_GUIDE_EN = `# Browser workbench — what to read, and what is this app's own
 
 This file was put here by Hermetra. Edit it, or delete it; it is yours.
+The same guide in Korean is beside it, in \`GUIDE_ko.md\`.
 
 ## The short version
 
@@ -396,24 +470,104 @@ The app does not install anything for you.
 The Run button runs the file open in the editor, top to bottom.
 \`console.log\` lands in the output panel as it happens, not at the end.
 
-## \`export extract\` / \`export transform\` — read this before you use it
+Nothing else is called for you, with one exception: if the file's **default
+export** is a function, Run calls it with \`(page, ctx)\` and prints what it
+returns, with a row count. That is how a script hands back a value.
 
-**This is not a library's syntax. It is a convention this app made up, and right
-now almost nothing uses it.**
+\`\`\`ts
+export default async (page, ctx) => {
+  await page.goto(ctx.url);
+  return page.$$eval('h1', (els) => els.map((el) => el.textContent));
+};
+\`\`\`
+`;
 
-What it does today: if your file exports a function named \`extract\`, Run calls
-\`extract(page, ctx)\` instead of merely importing the file. If \`transform\` is also
-exported, it is called with whatever \`extract\` returned. The final value is
-printed to the output panel with a row count.
+/** The same guide, in Korean. Kept beside the English one, not generated from it. */
+const SEED_GUIDE_KO = `# 브라우저 작업대 — 무엇을 찾아보고, 무엇이 이 앱 고유인가
 
-What it does not do: the Ingestion and Processing screens that were supposed to
-pick a script this way **are not built** — they are empty placeholders, and their
-own spec says the data shape is not decided yet. So the two names buy you nothing
-a plain script does not already give you, and they are matched literally: a typo
-like \`extrct\` fails silently.
+이 파일은 Hermetra 가 놓아 둔 것입니다. 고쳐도 되고 지워도 됩니다. 당신 파일입니다.
+같은 내용의 영어판이 옆에 있습니다: \`GUIDE_en.md\`.
 
-**Write a plain script.** This section is here so that a file you inherit which
-opens with \`export async function extract\` is not a mystery.
+## 짧은 요약
+
+여기 있는 스크립트는 진짜 Node 프로세스가 ES 모듈(= 파일 하나가 곧 모듈인, 자바스크립트
+표준 모듈 방식)로 불러오는 평범한 파일입니다. **아래 표의 전역 여섯 개 말고는 이 앱이
+지어낸 것이 하나도 없습니다.** 그래서 찾아볼 곳은 이렇습니다:
+
+| 무엇을 | 어디서 |
+|---|---|
+| \`page\`, \`context\`, \`browser\` — 브라우저에 하는 모든 것 | <https://playwright.dev/docs/api/class-page> |
+| 언어 자체 | TypeScript / ES 모듈 |
+| 전역 여섯 개 | 이 파일 |
+
+**엔진은 Firefox 입니다.** 작업대의 브라우저는 Firefox 로 만든 Camoufox 이고, 앱은
+Playwright 의 \`firefox\` 로 붙습니다. Playwright 문서에서 Chromium 전용이라고 표시된 것은
+여기서 동작하지 않습니다(CDP 세션, \`page.coverage\`, \`route\`·에뮬레이션 옵션 몇 가지).
+베껴 오기 전에 그 표시를 확인하세요.
+
+쓰는 버전: playwright 1.60, camoufox-js 0.12.
+
+## 이미 스코프에 있는 것 — import 필요 없음
+
+| 이름 | 무엇인가 |
+|---|---|
+| \`page\` | 지금 보고 있는 탭. 진짜 Playwright \`Page\` |
+| \`context\` | 그 탭이 속한 컨텍스트. \`await context.newPage()\` 로 탭을 하나 더 연다 |
+| \`browser\` | 브라우저 자체. 컨텍스트를 직접 만들고 싶을 때 |
+| \`ctx\` | \`{ url?: string }\` — 실행이 본 그 순간의 주소창 |
+| \`log(...)\` | \`console.log\` 와 같은 곳으로 간다: 아래 출력 패널 |
+| \`env\` | 스크립트를 돌리는 프로세스의 환경 변수 |
+
+\`bus\` 도 있지만 **아직 안 이어져 있습니다**: \`bus.set(k, v)\` 는 출력 패널에 줄 하나를
+찍을 뿐이고, \`bus.get()\` 은 언제나 \`undefined\` 를 돌려줍니다. 지금 스크립트끼리 값을
+넘기려면 파일이나 반환값을 쓰세요.
+
+이 이름들은 \`../hermetra-env.d.ts\` 에 선언돼 있고, 그래서 편집기가 빨간 줄을 긋지
+않습니다. 타입이 \`any\` 라 자동완성은 없습니다. 자동완성이 필요하면 \`scripts/\` 폴더를
+당신이 쓰는 편집기로 열어 \`npm i -D playwright\` 한 뒤, 필요한 것만 좁혀 쓰세요:
+
+\`\`\`ts
+const p = page as import('playwright').Page;
+\`\`\`
+
+이 앱의 편집기 안에서는 어느 쪽이든 \`any\` 로 남습니다 — 여기 Monaco 는 파일 시스템이 없어
+모듈 해석이 꺼져 있습니다.
+
+## import
+
+\`\`\`ts
+import { clean } from './lib/rows.ts';   // 당신 파일 — .ts 를 붙인 채로
+import { load } from 'cheerio';          // 패키지 — 이름만
+\`\`\`
+
+확장자는 선택이 아닙니다. Node 가 이 파일들을 ES 모듈로 불러오고, ES 모듈은 파일을 진짜
+이름으로 찾습니다. 기준은 **그 스크립트가 있는 폴더**라, \`./lib/rows.ts\` 는 이 파일 옆의
+\`lib\` 을 가리킵니다.
+
+패키지는 폴더가 모듈 뿌리인 자리에 설치합니다:
+
+\`\`\`
+cd <이 워크스페이스>/scripts
+npm i cheerio
+\`\`\`
+
+앱이 대신 설치해 주지는 않습니다.
+
+## 실행
+
+\`실행\` 버튼은 편집기에 열려 있는 파일을 위에서 아래로 돌립니다.
+\`console.log\` 는 끝나고 한꺼번에가 아니라, 찍히는 그때 아래 출력 패널로 갑니다.
+
+앱이 대신 불러 주는 것은 하나뿐입니다: 파일의 **기본 내보내기(default export)** 가 함수면
+\`실행\` 이 \`(page, ctx)\` 로 부르고, 돌려준 값을 줄 수와 함께 찍습니다. 스크립트가 값을
+돌려주는 방법입니다.
+
+\`\`\`ts
+export default async (page, ctx) => {
+  await page.goto(ctx.url);
+  return page.$$eval('h1', (els) => els.map((el) => el.textContent));
+};
+\`\`\`
 `;
 
 /**
@@ -454,7 +608,7 @@ function ensureModuleRoot(root: string): void {
 }
 
 /**
- * Put the guide in the slot if it is not there.
+ * Put both guides in the slot if they are not there.
  *
  * Not part of `seedIfEmpty`: that only fires into an **empty** slot, and the
  * person who needs a guide is the one already looking at a folder full of their
@@ -464,12 +618,26 @@ function ensureModuleRoot(root: string): void {
  * and a guide you can lose for good is worse than one that reappears.
  *
  * A revised guide will need what the seed already has (replace only a copy that
- * is byte-for-byte one the app wrote). There is only one version so far, so that
- * machinery is not here yet.
+ * is byte-for-byte one the app wrote). There is only one version of each so far,
+ * so that machinery is not here yet.
  */
 function ensureGuide(slotDir: string): void {
-  const file = path.join(slotDir, 'GUIDE.md');
-  if (!fs.existsSync(file)) fs.writeFileSync(file, SEED_GUIDE, 'utf-8');
+  // The single English guide is gone as a name, not only as a file: left beside
+  // the pair it puts three guides in the tree with two of them saying the same
+  // thing, and the person cannot tell which one the app maintains. It is removed
+  // even when edited — the user chose that on 2026-08-18 over a stale copy that
+  // never leaves — which makes this the one place here that can drop somebody's
+  // own writing, and the reason `GUIDE.md` is not a name to keep notes under.
+  const legacy = path.join(slotDir, LEGACY_GUIDE);
+  if (fs.existsSync(legacy)) fs.rmSync(legacy);
+
+  for (const [name, source] of [
+    [GUIDE_FILES[0], SEED_GUIDE_KO],
+    [GUIDE_FILES[1], SEED_GUIDE_EN],
+  ] as const) {
+    const file = path.join(slotDir, name);
+    if (!fs.existsSync(file)) fs.writeFileSync(file, source, 'utf-8');
+  }
 }
 
 function dir(slot: Slot): string {
@@ -550,10 +718,12 @@ function seedIfEmpty() {
   ];
   for (const [slot, files] of seeds) {
     const root = dir(slot);
-    // "Empty" means the person has nothing here — the guide `dir()` just laid
-    // down is the app talking to itself, and counting it would make every slot
+    // "Empty" means the person has nothing here — the guides `dir()` just laid
+    // down are the app talking to itself, and counting them would make every slot
     // look occupied and no starter file would ever land.
-    if (fs.readdirSync(root).filter((name) => name !== 'GUIDE.md').length > 0) {
+    const guides: readonly string[] = GUIDE_FILES;
+    const mine = fs.readdirSync(root).filter((name) => !guides.includes(name));
+    if (mine.length > 0) {
       // Not empty, so nothing is seeded — but a workspace opened a week ago is
       // still holding the starter file of that week, and this one is now wrong
       // about how scripts run.
